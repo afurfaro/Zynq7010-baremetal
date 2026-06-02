@@ -1,0 +1,20 @@
+# Ignore all 
+* 
+
+# Unignore all with extensions *.S *.inc *.c *.h *.md *.ld y con Makefile 
+!*.S
+!*.inc
+!*.c 
+!*.h 
+!Makefile 
+!*.md
+!*.ld
+!.gitignore
+
+# Unignore algunos tipos de archivos de gráficos
+!*.png
+!*.svg
+
+# Unignore all dirs
+!*/
+
