@@ -89,21 +89,21 @@ En la dirección:
 x/32wx 0xF8F00100
 ```
 
-Podemos ver que **```0xf8f0010c: 0x000003ff```**. Este valor coincide perfectamente con el registro **```GICC_IAR```** cuando no hay ninguna IRQ pendiente.
-El valor leído corresponde a ```Interrupt ID = 1023``` que significa ```Spurious Interrupt```
-Así que hemos confirmado ```text GIC CPU Interface = 0xF8F00100```
+Podemos ver que **`0xf8f0010c: 0x000003ff`**. Este valor coincide perfectamente con el registro **`GICC_IAR`** cuando no hay ninguna IRQ pendiente.
+El valor leído corresponde a `Interrupt ID = 1023` que significa `Spurious Interrupt`.
+Así que hemos confirmado `GIC CPU Interface = 0xF8F00100`.
+
 > Cuando no existe ninguna interrupción pendiente, el GIC devuelve el ID 1023 (spurious interrupt).
+
 
 ---
 #### 3. GIC Distributor
 
-Ei comando:
+El comando:
 ```gdb
 x/32wx 0xF8F01000
 ```
-muestra:
-**```0xf8f01004: 0x00000002```**
-Valor típico del **```ICTR```** (Typer Register), que indica la cantidad de líneas de interrupción implementadas Es en realidad 32*(N+1), en este caso 32*3 = 96 lineas de interrupción.
+muestra **`0xf8f01004: 0x00000002`**. Este es el valor típico del **```ICTR```** (Typer Register), que indica la cantidad de líneas de interrupción implementadas Es en realidad 32*(N+1), en este caso 32*3 = 96 lineas de interrupción.
 Por lo tanto confirmamos que soporta **```GIC Distributor = 0xF8F01000```**
 ---
 
