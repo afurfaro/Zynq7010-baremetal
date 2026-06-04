@@ -100,11 +100,12 @@ Así que hemos confirmado **`GIC CPU Interface Base Address= 0xF8F00100`**.
 #### 3. GIC Distributor
 
 El comando:
-``` 
+```gdb
 x/32wx 0xF8F01000
 ```
 muestra **`0xf8f01004: 0x00000002`**. Este es el valor típico del **`ICTR`** (Typer Register), que indica la cantidad de líneas de interrupción implementadas Es en realidad 32*(N+1), en este caso 32*3 = 96 lineas de interrupción.
 Por lo tanto confirmamos que soporta **`GIC Distributor = 0xF8F01000`**
+
 ---
 
 #### 4. Private Timer
@@ -112,7 +113,7 @@ La salida es coherente con lo que esperaba de QEMU: **`0xF8F00600 ... 0xF8F0063C
 Y en particular el mensaje: **`0xf8f00640:     Cannot access memory at address `**, es consistente con que el bloque del Private Timer ocupa exactamente 0x40 bytes.
 Por lo tanto podemos dar por confirmado: **`Private Timer Base Address = 0xF8F00600`**
 
-
+---
 #### Estado actual
 
 Los cuatro bloques han sud verificados experiementalmente sobre QEMU:
@@ -126,6 +127,7 @@ Los cuatro bloques han sud verificados experiementalmente sobre QEMU:
 
 Y es consistente con lo que establecen los Technical Reference de Zync 7000 y de Cortex A9.
 
+---
 #### Verificaciones adicionales
 Otra comprobación es verificar el ID del Timer, la cual podemos hacer mediante el siguiente comando de **`GDB`**:
 
@@ -491,6 +493,7 @@ dev: arm.cortex-a9-global-timer   @<=========
 ```
 Eso significa que QEMU está implementando correctamente el bloque privado del Cortex-A9 en el espacio de direccionamiento **`0xF8F00000 - 0xF8F01FFF`**, que coincide con la docuentación de Zynq 7000.
 
+---
 ### Conclusión
 Ya tenemos evidencia suficiente para arrancar TP3.1 en forma segura.
 
