@@ -100,7 +100,7 @@ Así que hemos confirmado **`GIC CPU Interface Base Address= 0xF8F00100`**.
 #### 3. GIC Distributor
 
 El comando:
-```gdb
+``` 
 x/32wx 0xF8F01000
 ```
 muestra **`0xf8f01004: 0x00000002`**. Este es el valor típico del **`ICTR`** (Typer Register), que indica la cantidad de líneas de interrupción implementadas Es en realidad 32*(N+1), en este caso 32*3 = 96 lineas de interrupción.
