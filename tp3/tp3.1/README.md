@@ -6,8 +6,8 @@ Configurar el private timer del Cortex A9 y el GIC para obtener la generación d
 * La CPU abandona el modo normal de ejecución.
 * E*ntra en modo IRQ.
 * El hardware guarda automáticamente:
-    * **```CPSR → SPSR_irq```**
-    * Dirección de retorno **```→ LR_irq```**
+    * **`CPSR → SPSR_irq`**
+    * Dirección de retorno **`→ LR_irq`**
 * Que se ejecuta irq_handler.
 * Que se retorna correctamente al programa interrumpido.
 
@@ -21,7 +21,7 @@ De acuerdo con el Technical Reference de Zynq-7000, la dirección Base del Mapa 
 * Global Timer
 Muchos de los cuales son de nuestro interés
 
-Para verificarlo ingresamos en culquiera de los TPs previos, ponemos un breakpoint en la primer instrucción de ```kernel.c```, e inspeccionamos las áreas de memoria siguientes:
+Para verificarlo ingresamos en culquiera de los TPs previos, ponemos un breakpoint en la primer instrucción de `kernel.c`, e inspeccionamos las áreas de memoria siguientes:
 
 ```gdb 
 >>> x/32wx 0xF8F00000
@@ -90,8 +90,8 @@ x/32wx 0xF8F00100
 ```
 
 Podemos ver que **`0xf8f0010c: 0x000003ff`**. Este valor coincide perfectamente con el registro **`GICC_IAR`** cuando no hay ninguna IRQ pendiente.
-El valor leído corresponde a `Interrupt ID = 1023` que significa `Spurious Interrupt`.
-Así que hemos confirmado `GIC CPU Interface = 0xF8F00100`.
+El valor leído corresponde a **`Interrupt ID = 1023`** que significa **`Spurious Interrupt`**.
+Así que hemos confirmado **`GIC CPU Interface Base Address= 0xF8F00100`**.
 
 > Cuando no existe ninguna interrupción pendiente, el GIC devuelve el ID 1023 (spurious interrupt).
 
@@ -103,14 +103,14 @@ El comando:
 ```gdb
 x/32wx 0xF8F01000
 ```
-muestra **`0xf8f01004: 0x00000002`**. Este es el valor típico del **```ICTR```** (Typer Register), que indica la cantidad de líneas de interrupción implementadas Es en realidad 32*(N+1), en este caso 32*3 = 96 lineas de interrupción.
-Por lo tanto confirmamos que soporta **```GIC Distributor = 0xF8F01000```**
+muestra **`0xf8f01004: 0x00000002`**. Este es el valor típico del **`ICTR`** (Typer Register), que indica la cantidad de líneas de interrupción implementadas Es en realidad 32*(N+1), en este caso 32*3 = 96 lineas de interrupción.
+Por lo tanto confirmamos que soporta **`GIC Distributor = 0xF8F01000`**
 ---
 
 #### 4. Private Timer
-La salida es coherente con lo que esperaba de QEMU: **```0xF8F00600 ... 0xF8F0063C```** es una región válida y actualmente todos los registros están en cero. Eso es razonable porque todavía no configuramos ningún timer.
-Y en particular el mensaje: **```0xf8f00640:     Cannot access memory at address ```**, es consistente con que el bloque del Private Timer ocupa exactamente 0x40 bytes.
-Por lo tanto podemos dar por confirmado: **```Private Timer Base Address = 0xF8F00600```**
+La salida es coherente con lo que esperaba de QEMU: **`0xF8F00600 ... 0xF8F0063C`** es una región válida y actualmente todos los registros están en cero. Eso es razonable porque todavía no configuramos ningún timer.
+Y en particular el mensaje: **`0xf8f00640:     Cannot access memory at address `**, es consistente con que el bloque del Private Timer ocupa exactamente 0x40 bytes.
+Por lo tanto podemos dar por confirmado: **`Private Timer Base Address = 0xF8F00600`**
 
 
 #### Estado actual
@@ -127,7 +127,7 @@ Los cuatro bloques han sud verificados experiementalmente sobre QEMU:
 Y es consistente con lo que establecen los Technical Reference de Zync 7000 y de Cortex A9.
 
 #### Verificaciones adicionales
-Otra comprobación es verificar el ID del Timer, la cual podemos hacer mediante el siguiente comando de **```GDB```**:
+Otra comprobación es verificar el ID del Timer, la cual podemos hacer mediante el siguiente comando de **`GDB`**:
 
 ```gdb
 >>> x/16wx 0xF8F00600
@@ -489,7 +489,7 @@ dev: arm_gic                      @<=========
 dev: arm_mptimer                  @<=========
 dev: arm.cortex-a9-global-timer   @<=========
 ```
-Eso significa que QEMU está implementando correctamente el bloque privado del Cortex-A9 en el espacio de direccionamiento **```0xF8F00000 - 0xF8F01FFF```**, que coincide con la docuentación de Zynq 7000.
+Eso significa que QEMU está implementando correctamente el bloque privado del Cortex-A9 en el espacio de direccionamiento **`0xF8F00000 - 0xF8F01FFF`**, que coincide con la docuentación de Zynq 7000.
 
 ### Conclusión
 Ya tenemos evidencia suficiente para arrancar TP3.1 en forma segura.
