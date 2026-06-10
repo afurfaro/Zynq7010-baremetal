@@ -679,7 +679,9 @@ Características principales:
 ```
 [31:1] UNK/SBZP   — UNKnown on reads, Should-Be-Zero-or-Preserved on writes. 
 [0]    Event Flag — Es un bit persistente que se activa automáticamente cuando el registro del contador 
-                    llega a cero. Si la interrupción del temporizador está habilitada, la interrupción con ID 29 se establece como pendiente en el distribuidor de interrupciones después de que se active el indicador de evento. El indicador de evento se borra cuando se escribe en 1.
+                    llega a cero. Si la interrupción del temporizador está habilitada, la interrupción con 
+                    ID 29 se establece como pendiente en el distribuidor de interrupciones después de que 
+                    se active el indicador de evento. El indicador de evento se borra cuando se escribe en 1.
 ```
 
 ---
