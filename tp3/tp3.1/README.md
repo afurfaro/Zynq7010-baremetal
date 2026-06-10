@@ -679,10 +679,13 @@ Características principales:
 ```
 [31:1] UNK/SBZP   — UNKnown on reads, Should-Be-Zero-or-Preserved on writes. 
 [0]    Event Flag — Es un bit persistente que se activa automáticamente cuando el registro del contador 
-                    llega a cero. Si la interrupción del temporizador está habilitada, la interrupción con 
-                    ID 29 se establece como pendiente en el distribuidor de interrupciones después de que 
-                    se active el indicador de evento. El indicador de evento se borra cuando se escribe en 1.
+                    llega a cero. Si la interrupción del Private Timer está habilitada, la interrupción con 
+                    ID 29 toma estado pendiente en el distribuidor de interrupciones después de que 
+                    se active el Event Flag. El Event Flag se borra cuando se escribe en 1.
 ```
+###### PTIMER_LOAD
+En el Technical Reference del Cortex-A9 se lo denomina **_Private Timer Load Register_**. Contiene el valor copiado al Primary Timer Counter Register cuando este disminuye hasta cero con el modo de recarga automática habilitado. Escribir en el registro de carga del temporizador significa que también se escribe en el registro del contador del temporizador.
+###### PTIMER_COUNTER
 
 ---
 
