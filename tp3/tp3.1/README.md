@@ -613,11 +613,11 @@ Periféricos / Timers / GPIO / ...
          ▼
    ┌─────────────┐
    │ Distributor │   ← Decide qué interrupciones están habilitadas
-   │   (GICD)    │      y a qué CPU se dirigen
+   │   (GICD)    │     y a qué CPU se dirigen
    └──────┬──────┘
           │
    ┌──────▼──────┐
-   │CPU Interface│  ← Cada núcleo tiene la suya propia
+   │CPU Interface│   ← Cada núcleo tiene la suya propia
    │   (GICC)    │     Negocia prioridad, ACK, EOI
    └─────────────┘
          │
@@ -626,7 +626,7 @@ Periféricos / Timers / GPIO / ...
 ```
 El **GIC** como se ve en el gráfico anterior se divide en dos partes. 
 ###### Distributor — GICD (`0xF8F01000`)
-El Distributor es **global**, esto es, está compartido por todos los procesadores del sistema. En este caso ambos cores A9. Es responsable de:
+El Distributor es **global**, esto es, está compartido por todos los procesadores del sistema. En el caso del Zync-7000, por ambos cores A9. Es responsable de:
 - Habilitar/deshabilitar interrupciones individuales
 - Asignar prioridades
 - Dirigir cada interrupción a uno o ambos cores (en la jerga del **GIC** denominado target)
@@ -667,7 +667,6 @@ Características principales:
 | `0x0C` | `PTIMER_ISR` | Interrupt Status: bit 0 = evento pendiente. **Escribir 1 para limpiar** (W1C) |
 
 ###### PTIMER_CONTROL — Bits relevantes
-
 ```
 [31:16] UNK/SBZP     — UNKnown on reads, Should-Be-Zero-or-Preserved on writes. 
 [15:8]  PRESCALER    — Divisor adicional del clock (0 = sin división)
@@ -675,6 +674,12 @@ Características principales:
 [2]     IRQ_ENABLE   — 1: genera interrupción al llegar a 0
 [1]     AUTO_RELOAD  — 1: recarga automática desde PTIMER_LOAD
 [0]     TIMER_ENABLE — 1: activa el contador
+```
+###### PTIMER_ISR — Bits relevantes
+```
+[31:1] UNK/SBZP   — UNKnown on reads, Should-Be-Zero-or-Preserved on writes. 
+[0]    Event Flag — Es un bit persistente que se activa automáticamente cuando el registro del contador 
+                    llega a cero. Si la interrupción del temporizador está habilitada, la interrupción con ID 29 se establece como pendiente en el distribuidor de interrupciones después de que se active el indicador de evento. El indicador de evento se borra cuando se escribe en 1.
 ```
 
 ---
