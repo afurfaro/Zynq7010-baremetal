@@ -1,37 +1,109 @@
+###############################################################################
+# Toolchain
+###############################################################################
+
 CROSS = arm-none-eabi
 
-CFLAGS = -Wall -O0 -g -ffreestanding -nostdlib -nostartfiles -mcpu=cortex-a9
+CC      = $(CROSS)-gcc
+AS      = $(CROSS)-as
+LD      = $(CROSS)-ld
+OBJCOPY = $(CROSS)-objcopy
+
+###############################################################################
+# Directorios
+###############################################################################
+
+SRC_DIR = src
+INC_DIR = include
+OBJ_DIR = obj
+BIN_DIR = bin
+
+###############################################################################
+# Flags
+###############################################################################
+
+CFLAGS  = -Wall -O0 -g -ffreestanding -nostdlib -nostartfiles \
+           -mcpu=cortex-a9 -I$(INC_DIR)
+
 ASFLAGS = -mcpu=cortex-a9 -g
-LDFLAGS = -T linker.ld -Map=kernel.map --cref
 
-OBJS = start.o kernel.o 
+LDFLAGS = -T linker.ld \
+           -Map=$(BIN_DIR)/kernel.map \
+           --cref
 
-all: kernel.elf Makefile
+###############################################################################
+# Fuentes
+###############################################################################
 
-start.o: start.S Makefile
-	$(CROSS)-as $(ASFLAGS) -a=start.lst -c $< -o $@
+CSRCS := $(wildcard $(SRC_DIR)/*.c)
+SSRCS := $(wildcard $(SRC_DIR)/*.S)
 
-kernel.o: kernel.c Makefile
-	$(CROSS)-gcc $(CFLAGS) -c $< -o $@
+COBJS := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(CSRCS))
+SOBJS := $(patsubst $(SRC_DIR)/%.S,$(OBJ_DIR)/%.o,$(SSRCS))
 
-kernel.elf: $(OBJS) Makefile
-	$(CROSS)-ld $(LDFLAGS) $(OBJS) -o $@
+OBJS := $(COBJS) $(SOBJS)
 
-kernel.bin: kernel.elf Makefile
-	$(CROSS)-objcopy -O binary $< $@
+###############################################################################
+# Targets
+###############################################################################
 
-run: kernel.bin
+all: directories $(BIN_DIR)/kernel.bin
+
+directories:
+	mkdir -p $(OBJ_DIR)
+	mkdir -p $(BIN_DIR)
+
+###############################################################################
+# Compilación C
+###############################################################################
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+###############################################################################
+# Assembler
+###############################################################################
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.S
+	$(AS) $(ASFLAGS) -a=$(BIN_DIR)/$*.lst $< -o $@
+
+###############################################################################
+# Link
+###############################################################################
+
+$(BIN_DIR)/kernel.elf: $(OBJS)
+	$(LD) $(LDFLAGS) $(OBJS) -o $@
+
+###############################################################################
+# Binary
+###############################################################################
+
+$(BIN_DIR)/kernel.bin: $(BIN_DIR)/kernel.elf
+	$(OBJCOPY) -O binary $< $@
+
+###############################################################################
+# QEMU
+###############################################################################
+
+run: $(BIN_DIR)/kernel.bin
 	qemu-system-arm \
-	-M xilinx-zynq-a9 \
-	-nographic \
-	-device loader,file=kernel.bin,addr=0x0
+		-M xilinx-zynq-a9 \
+		-nographic \
+		-device loader,file=$(BIN_DIR)/kernel.bin,addr=0x0
 
-debug: kernel.bin
+debug: $(BIN_DIR)/kernel.bin
 	qemu-system-arm \
-	-M xilinx-zynq-a9 \
-	-nographic \
-	-S -s \
-	-device loader,file=kernel.bin,addr=0x0
+		-M xilinx-zynq-a9 \
+		-nographic \
+		-S -s \
+		-device loader,file=$(BIN_DIR)/kernel.bin,addr=0x0
+
+###############################################################################
+# Limpieza
+###############################################################################
 
 clean:
-	rm -f *.o *.elf *.bin *.lst *.map
+	rm -rf $(OBJ_DIR)
+	rm -rf $(BIN_DIR)
+
+.PHONY: all run debug clean directories

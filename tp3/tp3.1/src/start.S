@@ -108,11 +108,11 @@ dabort_handler:
     b .
 
 irq_handler:
-    irq_handler:
-    mrs r0, cpsr
-    mrs r1, spsr
+    /* acknowledge a la fuente de interrupción */
 
-    movs pc,lr
+    /* desachar interrupción */
+
+    subs pc, lr, #4
 
 fiq_handler:
     b .
