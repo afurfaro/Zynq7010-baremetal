@@ -89,6 +89,7 @@ El Distributor tiene varios registros memory mapped. Vamos a describir lso que s
 | Offset |  Name  | Type |   Reset  | Description |
 |--------|--------|------|----------|-------------|
 | 0x000  | ICDDCR |  RW  |0x00000000|Distributor Control Register |
+| 0x004	 |ICDICTR	|  RO	 |Impl. def.|	Interrupt Controller Type Register |
 |0x100-0x17C |ICDISER |  RW |Impl. def.| Interrupt Set-Enable Registers|
 |0x400-0x7F8 | ICDIPR | RW  |0x00000000| Interrupt Priority Registers |
 |0x800-0x81C | ICDIPTR| RO  |Impl. def.| Interrupt Processor Targets Registers|
@@ -98,9 +99,55 @@ Permite el envío de interrupciones pendientes a las interfaces de la CPU.
 ```
 [31:1]    -      — Reservados. 
 [0]     ENABLE   — 0: El GIC ignora todas las señales de interrupción de los periféricos 
-                      y no reenvía las interrupciones pendientes a las interfaces de la CPU.
-                   1: El GIC monitorea las señales de interrupción de los periféricos y envía 
-                      las interrupciones pendientes a las interfaces de la CPU.
+                      y no reenvía las interrupciones pendientes a la/s CPU interface.
+                   1: El GIC monitorea las señales de interrupción de los periféricos y  
+                      envía las interrupciones pendientes a la/s CPU interface.
+```
+###### Interrupt Controller Type Register (ICDICTR)
+Provee información sobre la configuración del **GIC**. Indica:
+* Si el **GIC** implementa las Extensiones de Seguridad
+* El número máximo de identificadores de interrupción que admite el **GIC**
+* El número de interfaces de CPU implementadas
+* Si el **GIC** implementa las Extensiones de Seguridad, el número máximo de interrupciones periféricas compartidas bloqueables (LSPI) implementadas.
+```
+[31:16]       -       Reservado.
+[15:11]       -       Si el GIC no implementa las Extensiones de Seguridad, este campo está reservado.
+[15:11]      LSPI     Si el GIC implementa las Extensiones de Seguridad, el valor de este campo es el 
+                      número máximo de SPI bloqueables implementadas, de 0 (0b00000) a 31 (0b11111). 
+                      Consultar Bloqueo de configuración. Si este campo es 0b00000, el GIC no implementa 
+                      el bloqueo de configuración.
+[10]     SecurityExtn Indica si el GIC implementa las Extensiones de Seguridad.
+                      0: Extensiones de seguridad no implementadas.
+                      1: Extensiones de seguridad implementadas.
+[9:8]         -       Reservado.
+[7:5]     CPUNumber   Indica el número de CPU interface implementadas. El número de CPU interface
+                      implementadas es el valor de este campo + 1. 
+                      Por ejemplo, si este campo es 0b011, hay cuatro CPU interface.
+[4:0]   ITLinesNumber Indica el número máximo de interrupciones que admite el GIC [1]. Si el valor de este
+                      campo es N, el número máximo de interrupciones es 32(N+1). El rango de interrupt ID 
+                      va de 0 a uno menos que el número de interrupt ID. Por ejemplo: 0b00011 Hasta 128 
+                      líneas de interrupción, ID de interrupción del 0 al 127.
+                      El número máximo de interrupciones es 1020 (0b11111).
+                      Consultar el texto de esta sección para obtener más información.
+
+[1] Independientemente del rango de interrupt ID definidos por este campo, los Interrupt ID del 1020 al 1023 están reservados para fines especiales.
+```
+
+###### Interrupt Set-Enable Registers (ICDISERn)
+Proporcionan un bit de habilitación para cada interrupción compatible con el **GIC**. Escribir un 1 en un bit de habilitación habilita el envío de la interrupción correspondiente a la/s CPU interface. Leer un bit permite saber si la interrupción está habilitada.
+El número de **`ICDISER`** implementados es (**`ICDICTR.ITLinesNumber`** + 1). Se debe consultar el Interrupt Controller Type Register (**`ICDICTR`**). Los **`ICDISER`** implementados se numeran a partir de **`ICDISER0`**.
+
+En una implementación multiprocesador, **`ICDISER0`** se banquea para cada procesador conectado. Este registro almacena los bits de habilitación para las interrupciones 0-31.
+
+```
+                          │  Para SPIs y PPIs, cada bit:
+                          │  Lectura:
+                          │      0 Interrupción correspondiente deshabilitada.
+[31:0]  Set-enable bits   │      1 Interrupción correspondiente habilitada.
+                          │  Escritura:
+                          │      0 No tiene efecto.
+                          │      1 Habilita la interrupción correspondinente. La subsiguiente lectura de este bit retorna el valor 1.
+Para las SGIs el comportamiento de este bit en lecturas y escrituras es implementación dependiente.
 ```
 
 
