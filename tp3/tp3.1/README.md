@@ -15,8 +15,21 @@ Paso 2: Programar el Private Timer:
 * Timer Enable
 
 Paso 3 Modificar irq_handler
+Reemplazar en **`start.S`** el handler de **`IRQ`** por el siguiente código
+```armasm
+irq_handler:
+    /* acknowledge a la fuente de interrupción */
 
-En lugar de:
+    /* desachar interrupción */
+
+    subs pc, lr, #4
+
+```
+La última instrucción resuelve en forma simultánea las siguientes operaciones:
+* `pc = lr - 4`
+* Copia **`SPSR_irq → CPSR`**
+* Vuelve al modo anterior (el del programa interrumpido). En nuestro caso será el modo **`SYS`** ya que el sistema luego del boot quedó en este modo.
+
 ### Introducción.
 Verificamos si qemu puede emular correctamente los recursos que planteamos
 De acuerdo con el Technical Reference de Zynq-7000, la dirección Base del Mapa de Registros Privados de la CPU  es 0xF8900000. Nuestro interés en particular es a partir de 0xF8F00000, en donde se encuentran los registros de 
@@ -551,49 +564,6 @@ src/
     start.S
     kernel.c
 ```
-#### Macros
-En los sistemas embedded es muy frecuente que los registros de control de los periféricos se accedan **mapeados en memoria ** (*memory mapped I/O*). Desde el punto de vista del procesador, un registro del timer o del controlador de interrupciones no es más que una dirección de memoria que se puede leer o escribir.
-Para facilitar la escritura del código definimos en **`kernel.h`** la siguiente macro:
-```c
-#define REG32(addr) (*(volatile uint32_t *)(addr))
-```
-Su funcionamiento puede comprenderse analizando la expresión de derecha a izquierda.
-En primer lugar, **`(uint32_t *)`** convierte el valor numérico **`addr`** en un **puntero a un entero no signado de 32 bits**. Es decir, el compilador deja de interpretar ese valor como un simple número y pasa a tratarlo como una dirección de memoria a partir de la cual se encuentra almacenado un dato de 32 bits.
-
-El _keyword_ **`volatile`** indica al compilador que el contenido de esa dirección puede cambiar por causas externas al programa, por ejemplo debido al hardware. Este es el comporatmiento típico de un dispositivo de E/S ya que por lo general pone disponible a la CPU datos que provienen desde el exterior. Esta _keyword_, hace que el compilador no optimice las lecturas ni las escrituras sobre ese registro, accediendo siempre a la dirección física correspondiente.
-
-Finalmente, el operador **`*`** desreferencia el puntero, es decir, permite acceder al contenido de la dirección **`addr`**. Como resultado, **`REG32(addr)`** se comporta exactamente igual que una variable de tipo **`uint32_t`**, ya que termina proporcionando el contenido de una dirección de memoria, aunque en realidad representa un registro de hardware.
-
-De este modo, la instrucción siguiente que proporciona acceso al registro de carga del Timer:
-
-```c
-REG32(PTIMER_BASE + PTIMER_LOAD_OFFSET) = 1000000;
-```
-
-puede interpretarse conceptualmente en cuatro pasos:
-
-1. Se calcula la dirección del registro `LOAD` del timer sumando la dirección base del periférico y el desplazamiento (*offset*) correspondiente al archivo particular.
-2. Esa dirección se convierte en un puntero a entero de 32 bits.
-3. El puntero se desreferencia para acceder al contenido de esa posición de memoria.
-4. Se escribe el valor `1000000` en dicha dirección.
-
-En otras palabras, esta sentencia equivale a escribir directamente en un registro físico del timer. El hardware detecta esa escritura y actualiza internamente su registro `LOAD`. A partir de este momento, el procesador ya no está manipulando memoria RAM convencional, sino interactuando directamente con un periférico mediante el mismo mecanismo de acceso a memoria que utiliza para leer o escribir variables comunes y corrientes.
-
-Reemplazar en **`start.S`** el handler de **`IRQ`** por el siguiente código
-```armasm
-irq_handler:
-    /* acknowledge a la fuente de interrupción */
-
-    /* desachar interrupción */
-
-    subs pc, lr, #4
-
-```
-La última instrucción resuelve en forma simultánea las siguientes operaciones:
-* `pc = lr - 4`
-* Copia **`SPSR_irq → CPSR`**
-* Vuelve al modo anterior (el del programa interrumpido). En nuestro caso será el modo **`SYS`** ya que el sistema luego del boot quedó en este modo.
-
 #### Manejo del Hardware 
 Esto es lo novedoso en este punto de nuestro proyecto. Comenzamos a trabajar con el sistema de Entrada/Salida.
 Iniciamos con dos dispositivos: el Private Timer del Cortex A9, al que configuraremos con el objetivo que genere una interrupción **`IRQ`** en forma periódica, y el _Generic Interrupt Controller_ de ARM, de ahora en mas el **GIC**, que gestionará, la interrupción del Private Timer, y en la medida en que vayamos incorporando nuevos dispositivos de E/S, gestionará además sus interrupciones.
@@ -806,3 +776,32 @@ void IRQ_Handler(void) {
 > - `GICD_ITARGETSR`: base `0x800` + byte `29` → `0xF8F0181D`
 
 ---
+
+#### Macros
+En los sistemas embedded es muy frecuente que los registros de control de los periféricos se accedan **mapeados en memoria ** (*memory mapped I/O*). Desde el punto de vista del procesador, un registro del timer o del controlador de interrupciones no es más que una dirección de memoria que se puede leer o escribir.
+Para facilitar la escritura del código definimos en **`kernel.h`** la siguiente macro:
+```c
+#define REG32(addr) (*(volatile uint32_t *)(addr))
+```
+Su funcionamiento puede comprenderse analizando la expresión de derecha a izquierda.
+En primer lugar, **`(uint32_t *)`** convierte el valor numérico **`addr`** en un **puntero a un entero no signado de 32 bits**. Es decir, el compilador deja de interpretar ese valor como un simple número y pasa a tratarlo como una dirección de memoria a partir de la cual se encuentra almacenado un dato de 32 bits.
+
+El _keyword_ **`volatile`** indica al compilador que el contenido de esa dirección puede cambiar por causas externas al programa, por ejemplo debido al hardware. Este es el comporatmiento típico de un dispositivo de E/S ya que por lo general pone disponible a la CPU datos que provienen desde el exterior. Esta _keyword_, hace que el compilador no optimice las lecturas ni las escrituras sobre ese registro, accediendo siempre a la dirección física correspondiente.
+
+Finalmente, el operador **`*`** desreferencia el puntero, es decir, permite acceder al contenido de la dirección **`addr`**. Como resultado, **`REG32(addr)`** se comporta exactamente igual que una variable de tipo **`uint32_t`**, ya que termina proporcionando el contenido de una dirección de memoria, aunque en realidad representa un registro de hardware.
+
+De este modo, la instrucción siguiente que proporciona acceso al registro de carga del Timer:
+
+```c
+REG32(PTIMER_BASE + PTIMER_LOAD_OFFSET) = 1000000;
+```
+
+puede interpretarse conceptualmente en cuatro pasos:
+
+1. Se calcula la dirección del registro `LOAD` del timer sumando la dirección base del periférico y el desplazamiento (*offset*) correspondiente al archivo particular.
+2. Esa dirección se convierte en un puntero a entero de 32 bits.
+3. El puntero se desreferencia para acceder al contenido de esa posición de memoria.
+4. Se escribe el valor `1000000` en dicha dirección.
+
+En otras palabras, esta sentencia equivale a escribir directamente en un registro físico del timer. El hardware detecta esa escritura y actualiza internamente su registro `LOAD`. A partir de este momento, el procesador ya no está manipulando memoria RAM convencional, sino interactuando directamente con un periférico mediante el mismo mecanismo de acceso a memoria que utiliza para leer o escribir variables comunes y corrientes.
+
