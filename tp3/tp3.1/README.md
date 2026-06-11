@@ -172,7 +172,7 @@ Configuraciones
 
 Estos registros están disponibles en todas las configuraciones del **GIC**. Si el **GIC** implementa las Extensiones de Seguridad, estos registros son comunes.
 
-El número de **ICDIPR** implementados es **(8 * (`ICDICTR.ITLinesNumber` + 1))**,c ver **Interrupt Controller Type Register (ICDICTR)**. Los **ICDIPR** implementados se numeran a partir de **ICDIPR0**.
+El número de **ICDIPR** implementados es **(8 * (`ICDICTR.ITLinesNumber` + 1))**, (ver **Interrupt Controller Type Register (ICDICTR)**). Los **ICDIPR** implementados se numeran a partir de **ICDIPR0**.
 
 En una implementación multiprocesador, los registros **ICDIPR0** a **ICDIPR7** se banquean por cada procesador conectado.Estos registros contienen los campos de Prioridad para las interrupciones 0-31.
 
@@ -197,7 +197,47 @@ Para un interrupt ID N, si DIV y MOD representan las operaciones de división en
   - El byte offset 3 corresponde a los bits [31:24] del registro.
 
 ###### Interrupt Processor Targets Registers (ICDIPTRn)
+Los registros **ICDIPTR** proporcionan un campo de CPU destino de 8 bits para cada interrupción compatible con el **GIC**. Este campo almacena la lista de procesadores a los que se envía la interrupción en caso de activarse.
+Para una implementación multiprocesador:
+* Estos registros son accesibles por byte.
+* Un campo de registro correspondiente a una interrupción no implementada es RAZ/WI (Read As Zero/Write Ignored).
+* Los registros **ICDIPTR0** a **ICDIPTR7** son de solo lectura, y cada campo devuelve un valor que corresponde únicamente al procesador que lee el registro.
+Cada implementación define qué SPI, si las hay, se configura estáticamente en el hardware. El campo CPU target para dicha SPI es solo lectura y devuelve un valor que indica las CPU target para la interrupción.
+En una implementación monoprocesador, todas las interrupciones se dirigen a un único procesador y los **ICDIPTR** son RAZ/WI.
+El número de **ICDIPTR** implementados es **(8 * (`ICDICTR.ITLinesNumber` + 1))** (ver **Interrupt Controller Type Register (ICDICTR)**). Los **ICDIPTR** implementados se numeran a partir de **ICDIPTR0**.
 
+En una implementación multiprocesador, los registros **ICDIPTR0** a **ICDIPTR7** se banquean por cada procesador conectado. Estos registros contienen los campos CPU target para las interrupciones 0-31.
+
+```
+[31:24]	CPU target, 
+        byte offset 3	
+[23:16]	CPU target, 
+        byte offset 2
+                          Los procesadores del sistema se numeran a partir del 0, y cada bit en un campo `CPU target` se refiere al procesador correspondiente (véase la Tablasiguiente). Por ejemplo, un valor de 0x3 significa que la interrupción pendiente se envía a los procesadores 0 y 1.
+                          Para ICDIPTR0 a ICDIPTR7, la lectura de cualquier campo CPU target devuelve el número del procesador que realiza la lectura.
+[15:8]	CPU target, 
+        byte offset 1
+[7:0]	  CPU target, 
+        byte offset 0
+```
+
+|Valor del campo CPU targets	| Interrupt targets |
+|-----------------------------|-----------------|
+|0bxxxx xxx1 |	CPU interface 0 |
+|-----------|------------------------------------|
+|0bxxxx xx1x |	CPU interface 1 |
+|-----------|------------------------------------|
+|0bxxxx x1xx |	CPU interface 2 |
+|-----------|------------------------------------|
+|0bxxxx 1xxx |	CPU interface 3 |
+|-----------|------------------------------------|
+|0bxxx1 xxxx |	CPU interface 4 |
+|-----------|------------------------------------|
+|0bxx1x xxxx |	CPU interface 5 |
+|-----------|------------------------------------|
+|0bx1xx xxxx |	CPU interface 6 |
+|-----------|------------------------------------|
+|0b1xxx xxxx |	CPU interface 7 |
 
 ##### Registros de la CPU Interface
 La misma aclaración vale para los registros de la/s CPU Interface:
