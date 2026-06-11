@@ -283,7 +283,7 @@ El handler de interrupción que ejecuta el procesador lee este registro para obt
 [12:10]     CPUID     Para las SGI en una implementación multiprocesador, este campo identifica 
                       el procesador que solicitó la interrupción. Devuelve el número de CPU interface que realizó la solicitud; por ejemplo, un valor de 3 (0b011) significa que la solicitud fue generada por una escritura en el IDCSFGIR en la interfaz 3 de la CPU.
                       Para todas las demás interrupciones, este campo es RAZ (Read As Zero).
-[9:0]   ACKINTID      El Interrupt ID.
+[9:0]      ACKINTID   El Interrupt ID.
 ```
 
 #### El Private Timer del Cortex-A9
