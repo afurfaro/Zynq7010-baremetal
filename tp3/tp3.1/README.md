@@ -666,7 +666,8 @@ Características principales:
 | `0x08` | `PTIMER_CONTROL` | Control: enable, auto-reload, IRQ enable, prescaler |
 | `0x0C` | `PTIMER_ISR` | Interrupt Status: bit 0 = evento pendiente. **Escribir 1 para limpiar** (W1C) |
 
-###### PTIMER_CONTROL — Bits relevantes
+###### PTIMER_CONTROL 
+En el Technical Reference del Cortex A9 se lo denomina **_Private Timer Control Register_**. Su bit layout es el siguiente:
 ```
 [31:16] UNK/SBZP     — UNKnown on reads, Should-Be-Zero-or-Preserved on writes. 
 [15:8]  PRESCALER    — Divisor adicional del clock (0 = sin división)
@@ -675,7 +676,8 @@ Características principales:
 [1]     AUTO_RELOAD  — 1: recarga automática desde PTIMER_LOAD
 [0]     TIMER_ENABLE — 1: activa el contador
 ```
-###### PTIMER_ISR — Bits relevantes
+###### PTIMER_ISR 
+En el Technical Reference del Cortex A9 se lo denomina **_Private Timer Interrupt Status Register_**. Su bit layout es el siguiente:
 ```
 [31:1] UNK/SBZP   — UNKnown on reads, Should-Be-Zero-or-Preserved on writes. 
 [0]    Event Flag — Es un bit persistente que se activa automáticamente cuando el registro del contador 
@@ -684,8 +686,13 @@ Características principales:
                     se active el Event Flag. El Event Flag se borra cuando se escribe en 1.
 ```
 ###### PTIMER_LOAD
-En el Technical Reference del Cortex-A9 se lo denomina **_Private Timer Load Register_**. Contiene el valor copiado al Primary Timer Counter Register cuando este disminuye hasta cero con el modo de recarga automática habilitado. Escribir en el registro de carga del temporizador significa que también se escribe en el registro del contador del temporizador.
+En el Technical Reference del Cortex-A9 se lo denomina **_Private Timer Load Register_**. Contiene el valor copiado al **_Primary Timer Counter Register_** cuando este llega a cero con el modo de recarga automática habilitado. Escribir en este registro significa escribir tambien en **_Primary Timer Counter Register_**.
+
 ###### PTIMER_COUNTER
+El Tecnical Reference del Cortex A9 lo refiere como **_Primary Timer Counter Register_**, y su principal característica es que es un contador decreciente. Para ello es necesario habilitarlo mediante el bit [0] del **_Private Timer Control Register_**. Si el procesador Cortex-A9 está en estado debug, el contador solo decrementa cuando el procesador vuelve al estado normal.
+Cuando el **_Primary Timer Counter Register_** llega a cero y el se habilitó el modo Auto reload, recarga el valor en el **_Private Timer Load Register_** y continúa decrementando desde ese valor. Si el modo Auto reload no está habilitado, al  llegar a cero, se detiene.
+Cuando el **_Private Timer Load Register_** llega a cero, si la generación de interrupciones está habilitada en el bit [2] del **_Private Timer Control Register_**, se activa el Event Flag del **_Private Timer Interrupt Status Register_**, y la interrupción con ID 29 toma estado Pendiente en el Distribuidor del **GIC**, .
+Escribir en el **_Primary Timer Counter Register_** o en el **_Private Timer Load Register_**, fuerza al primero a decrementar desde el valor recién escrito.
 
 ---
 
