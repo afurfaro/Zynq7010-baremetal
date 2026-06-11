@@ -181,7 +181,9 @@ En una implementación multiprocesador, los registros **ICDIPR0** a **ICDIPR7** 
         byte offset 3	
 [23:16]	Prioridad, 
         byte offset 2
-                          Cada campo de prioridad mantiene un valor de prioridad de un rago "implementation defined". A menor valor, mayor prioridad para la correspondente interrupción.
+                          Cada campo de prioridad mantiene un valor de prioridad de un rango
+                          "implementation defined". A menor valor, mayor prioridad para la 
+                          correspondente interrupción.
 [15:8]  Prioridad, 
         byte offset 1
 [7:0]   Prioridad, 
