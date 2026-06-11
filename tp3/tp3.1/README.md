@@ -95,7 +95,11 @@ El Distributor tiene varios registros memory mapped. Vamos a describir lso que s
 
 
 ##### Registros de la CPU Interface
+La misma aclaración vale para los registros de la/s CPU Interface:
 
+| Offset |  Name  | Type |   Reset  | Description |
+|--------|--------|------|----------|-------------|
+| 0x00	| ICCICR	| RW	| 0x00000000	| CPU Interface Control Register |
 
 #### El Private Timer del Cortex-A9
 
