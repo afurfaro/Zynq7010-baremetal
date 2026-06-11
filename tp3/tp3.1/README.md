@@ -85,7 +85,7 @@ La CPU Interface es **privada por core**. Es responsable de:
 
 ##### Registros del Distributor
 | Offset |  Name  | Type |   Reset  | Description |
-+--------+--------+------+----------+-------------+
+|--------|--------|------|----------|-------------|
 | 0x000  | ICDDCR |  RW  |0x00000000|Distributor Control Register |
 | 0x004  |ICDICTR |  RO  |Impl. def.|Interrupt Controller Type Register|
 | 0x008  |ICDIIDR |  RO  |Impl. def.|Distributor Implementer Identification Register|
