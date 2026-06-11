@@ -242,6 +242,43 @@ La misma aclaración vale para los registros de la/s CPU Interface:
 | 0x0C	| ICCIAR	| RO	| 0x000003FF	| Interrupt Acknowledge Register | 
 | 0x10	| ICCEOIR	| WO	|      -	| End of Interrupt Register |
 
+###### CPU Interface Control Register (ICCICR)
+Permite la señalización de interrupciones a los procesadores de destino.
+
+```
+[31:1]      -     Reserved.
+[0]     Enable    Habilitación Global para la señalización de interrupciones por parte de las CPU interface a los  procesadores conectados.
+                    0: Desabilita señalización de interrupciones.
+                    1: Habilita señalización de interrupciones.
+
+En un GIC que implementa Extensiones de Seguridad, este bit controla solo la señallización de interrupciones Non-seguras.######Interrupt Priority Mask Register (ICCPMR)
+
+
+```
+###### Interrupt Priority Mask Register (ICCPMR)
+Proporciona un filtro de prioridad de interrupciones. Solo aquellas interrupciones con una prioridad superior al valor de este registro pueden ser señalizadas al procesador.
+**Nota:** Una prioridad alta corresponde a un valor menor en el campo `Prioridad`.
+
+```
+[31:8]      -       Reserved.
+[7:0]   Priority    Nivel de máscara de prioridad para la CPU interface. Si la prioridad de 
+                    una interrupción es superior al valor indicado en este campo, la interfaz 
+                    envía la interrupción al procesador.
+                    Si el GIC soporta menos de 256 niveles de prioridad, algunos bits son RAZ/WI,
+                    según se indica a continuación:
+                    Soporta 128 niveles
+                          Bit [0] = 0.
+                    Soporta 64 niveles
+                          Bit [1:0] = 0b00.
+                    Soporta 32 niveles
+                          Bit [2:0] = 0b000.
+                    Soporta 16 niveles
+                          Bit [3:0] = 0b0000.
+```
+
+###### Interrupt Acknowledge Register (ICCIAR)
+
+
 #### El Private Timer del Cortex-A9
 
 Cada core A9 tiene su propio timer privado. Sus registros se definen en el Technical Reference del Cortex-A9. En el Zynq-7000 se los ubica a partir de la Base address: **`0xF8F00600`**
