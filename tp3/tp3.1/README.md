@@ -149,7 +149,14 @@ En una implementación multiprocesador, **`ICDISER0`** se banquea para cada proc
                           │      1 Habilita la interrupción correspondinente. La subsiguiente lectura de este bit retorna el valor 1.
 Para las SGIs el comportamiento de este bit en lecturas y escrituras es implementación dependiente.
 ```
+Para un interrupt ID = N, y si  DIV y MOD representan las operaciones de división entera y módulo se tiene:
+* El correspondiente número **M** de **`ICDISER`**, se obtiene mediante **M = N DIV 32**.
+* El desplazamiento del **ICDISER** requerido es **(0x100 + (4*M))**.
+* El bit de habilitación requerido en este registro es **N MOD 32**.
 
+Al arranque y luego de un reset, un procesador puede usar este registro para determinar qué interrupt ID de periféricos admite el** GIC**.
+
+**_Nota_**: Deshabilitar una interrupción solo desactiva su envío a cualquier CPU interface. No impide que la interrupción cambie de estado, por ejemplo, que pase a estar pendiente o activa y pendiente si ya está activa.
 
 ##### Registros de la CPU Interface
 La misma aclaración vale para los registros de la/s CPU Interface:
