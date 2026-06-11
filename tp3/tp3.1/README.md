@@ -84,11 +84,14 @@ La CPU Interface es **privada por core**. Es responsable de:
 > :bangbang: **El Private Timer del Cortex-A9 usa la interrupción ID 29 (PPI).**
 
 ##### Registros del Distributor
+El Distributor tiene varios registros memory mapped. Vamos a describir lso que son de uso par anuestra implementación. Siempre está la documentación de ARM para poder indagar acerca del resto si es necesario.
+
 | Offset |  Name  | Type |   Reset  | Description |
 |--------|--------|------|----------|-------------|
 | 0x000  | ICDDCR |  RW  |0x00000000|Distributor Control Register |
-| 0x004  |ICDICTR |  RO  |Impl. def.|Interrupt Controller Type Register|
-| 0x008  |ICDIIDR |  RO  |Impl. def.|Distributor Implementer Identification Register|
+|0x100-0x17C |ICDISER |  RW |Impl. def.| Interrupt Set-Enable Registers|
+|0x400-0x7F8 | ICDIPR | RW  |0x00000000| Interrupt Priority Registers |
+|0x800-0x81C | ICDIPTR| RO  |Impl. def.| Interrupt Processor Targets Registers|
 
 
 ##### Registros de la CPU Interface
