@@ -14,7 +14,7 @@ Paso 2: Programar el Private Timer:
 * IRQ Enable
 * Timer Enable
 
-Paso 3 Modificar irq_handler
+Paso 3: Modificar irq_handler
 Reemplazar en **`start.S`** el handler de **`IRQ`** por el siguiente código
 ```armasm
 irq_handler:
@@ -30,7 +30,233 @@ La última instrucción resuelve en forma simultánea las siguientes operaciones
 * Copia **`SPSR_irq → CPSR`**
 * Vuelve al modo anterior (el del programa interrumpido). En nuestro caso será el modo **`SYS`** ya que el sistema luego del boot quedó en este modo.
 
-### Introducción.
+### Manejo del Hardware 
+Esto es lo novedoso en este punto de nuestro proyecto. Comenzamos a trabajar con el sistema de Entrada/Salida.
+Iniciamos con dos dispositivos: el Private Timer del Cortex A9, al que configuraremos con el objetivo que genere una interrupción **`IRQ`** en forma periódica, y el _Generic Interrupt Controller_ de ARM, de ahora en mas el **GIC**, que gestionará, la interrupción del Private Timer, y en la medida en que vayamos incorporando nuevos dispositivos de E/S, gestionará además sus interrupciones.
+
+#### ¿Qué es el GIC?
+
+El **GIC** es el Controlador de Interrupciones que ARM diseña para sus procesadores. El rol de un controlador de interrupciones, es centralizar la gestión de todas las interrupciones de un sistema de cómputo. En el Zynq-7000, el **GIC** implementa la especificación **ARM GICv1**. 
+
+Su función es actuar como árbitro entre las fuentes de interrupción de los dispositivos de hardware y la/s CPU del sistema. Sin él, cada periférico necesitaría su propio mecanismo de señalización hacia la/s CPU. Y la/s CPU necesitaría/n una cantidad enorme de entradas de interrupción mas la lógica para gestionarlas. Inviable.
+
+Se trata de un periférico más del sistema de E/S, pero su rol lo convierte en un periférico escencial dentro de cualquier sistema de cómputo. Como cualquier periférico, el **GIC** requiere ser inicializado, antes de ponerse en operación y una vez operativo, permite ser controlado y monitoreado por parte del software de gestión. Para ello tiene una cantidad de registros definidos en la espcificación. Xilinx, fabricante del Zynq-7000 lo mapea a partir de la dirección base `0xF8F00000`.
+
+El **GIC** está organizado en dos bloque funcionales perfectmente diferenciados:
+```
+Periféricos / Timers / GPIO / ...
+         │
+         ▼
+   ┌─────────────┐
+   │ Distributor │   ← Decide qué interrupciones están habilitadas
+   │   (GICD)    │     y a qué CPU se dirigen
+   └──────┬──────┘
+          │
+   ┌──────▼──────┐
+   │CPU Interface│   ← Cada núcleo tiene la suya propia
+   │   (GICC)    │     Negocia prioridad, ACK, EOI
+   └─────────────┘
+         │
+         ▼
+      CPU Core
+```
+El **GIC** como se ve en el gráfico anterior se divide en dos partes. 
+##### Distributor — GICD (`0xF8F01000`)
+El Distributor es **global**, esto es, está compartido por todos los procesadores del sistema. En el caso del Zync-7000, por ambos cores A9. Es responsable de:
+- Habilitar/deshabilitar interrupciones individuales
+- Asignar prioridades
+- Dirigir cada interrupción a uno o ambos cores (en la jerga del **GIC** denominado target)
+- Clasificar el modo de disparo de las entradas de interrupción (nivel / flanco)
+##### CPU Interface — GICC (`0xF8F00100`)
+La CPU Interface es **privada por core**. Es responsable de:
+- Habilitar la recepción de interrupciones en ese core
+- Establecer el umbral de prioridad mínima
+- Proveer el ID de la interrupción activa (normalmente a requerimiento del handler)
+- Recibir el **EOI** (End Of Interrupt) para liberar la línea de interrupción
+##### Tipos de interrupción según el GIC
+
+| Tipo | Sigla | Rango de IDs | Descripción |
+|------|-------|--------------|-------------|
+| Software Generated | SGI | 0–15 | Inter-CPU, generadas por software |
+| Private Peripheral | PPI | 16–31 | Privadas de cada core (timers, watchdog) |
+| Shared Peripheral | SPI | 32–1019 | Periféricos del SoC (UART, Ethernet, etc.) |
+
+> :bangbang: **El Private Timer del Cortex-A9 usa la interrupción ID 29 (PPI).**
+
+##### Registros del Distributor
+| Offset |  Name  | Type |   Reset  | Description |
++--------+--------+------+----------+-------------+
+| 0x000  | ICDDCR |  RW  |0x00000000|Distributor Control Register |
+| 0x004  |ICDICTR |  RO  |Impl. def.|Interrupt Controller Type Register|
+| 0x008  |ICDIIDR |  RO  |Impl. def.|Distributor Implementer Identification Register|
+
+
+##### Registros de la CPU Interface
+
+
+#### El Private Timer del Cortex-A9
+
+Cada core A9 tiene su propio timer privado. Sus registros se definen en el Technical Reference del Cortex-A9. En el Zynq-7000 se los ubica a partir de la Base address: **`0xF8F00600`**
+
+Características principales:
+- Clock: operan a la mitad del clock de la CPU (`CPU_3x2x / 2`)
+- Cuenta descendente (*count-down*), es decir, se decrementan por cada clock de entrada
+- Como consecuencia de la carectarística anterior, genera la interrupción **ID 29** al llegar a **cero**
+- Puede operar en modo **one-shot** o **auto-reload**
+
+##### Registros del Private Timer
+
+| Offset | Nombre | Descripción |
+|--------|--------|-------------|
+| `0x00` | `PTIMER_LOAD` | Valor de recarga. Se copia en el counter al inicio o al llegar a 0 en auto-reload |
+| `0x04` | `PTIMER_COUNTER` | Valor actual del contador (se decrementa) |
+| `0x08` | `PTIMER_CONTROL` | Control: enable, auto-reload, IRQ enable, prescaler |
+| `0x0C` | `PTIMER_ISR` | Interrupt Status: bit 0 = evento pendiente. **Escribir 1 para limpiar** (W1C) |
+
+##### PTIMER_CONTROL 
+En el Technical Reference del Cortex A9 se lo denomina **_Private Timer Control Register_**. Su bit layout es el siguiente:
+```
+[31:16] UNK/SBZP     — UNKnown on reads, Should-Be-Zero-or-Preserved on writes. 
+[15:8]  PRESCALER    — Divisor adicional del clock (0 = sin división)
+[7:3]   UNK/SBZP     — UNKnown on reads, Should-Be-Zero-or-Preserved on writes.
+[2]     IRQ_ENABLE   — 1: genera interrupción al llegar a 0
+[1]     AUTO_RELOAD  — 1: recarga automática desde PTIMER_LOAD
+[0]     TIMER_ENABLE — 1: activa el contador
+```
+##### PTIMER_ISR 
+En el Technical Reference del Cortex A9 se lo denomina **_Private Timer Interrupt Status Register_**. Su bit layout es el siguiente:
+```
+[31:1] UNK/SBZP   — UNKnown on reads, Should-Be-Zero-or-Preserved on writes. 
+[0]    Event Flag — Es un bit persistente que se activa automáticamente cuando el registro del contador 
+                    llega a cero. Si la interrupción del Private Timer está habilitada, la interrupción con 
+                    ID 29 toma estado pendiente en el distribuidor de interrupciones después de que 
+                    se active el Event Flag. El Event Flag se borra cuando se escribe en 1.
+```
+##### PTIMER_LOAD
+En el Technical Reference del Cortex-A9 se lo denomina **_Private Timer Load Register_**. Contiene el valor copiado al **_Primary Timer Counter Register_** cuando este llega a cero con el modo de recarga automática habilitado. Escribir en este registro significa escribir tambien en **_Primary Timer Counter Register_**.
+
+##### PTIMER_COUNTER
+El Tecnical Reference del Cortex A9 lo refiere como **_Primary Timer Counter Register_**, y su principal característica es que es un contador decreciente. Para ello es necesario habilitarlo mediante el bit [0] del **_Private Timer Control Register_**. Si el procesador Cortex-A9 está en estado debug, el contador solo decrementa cuando el procesador vuelve al estado normal.
+Cuando el **_Primary Timer Counter Register_** llega a cero y el se habilitó el modo Auto reload, recarga el valor en el **_Private Timer Load Register_** y continúa decrementando desde ese valor. Si el modo Auto reload no está habilitado, al  llegar a cero, se detiene.
+Cuando el **_Private Timer Load Register_** llega a cero, si la generación de interrupciones está habilitada en el bit [2] del **_Private Timer Control Register_**, se activa el Event Flag del **_Private Timer Interrupt Status Register_**, y la interrupción con ID 29 toma estado Pendiente en el Distribuidor del **GIC**, .
+Escribir en el **_Primary Timer Counter Register_** o en el **_Private Timer Load Register_**, fuerza al primero a decrementar desde el valor recién escrito.
+
+---
+
+#### Secuencia de configuración
+
+Para tener el Private Timer generando interrupciones, hay que configurar **tres capas** en orden:
+
+```
+1. Distributor (GICD)  →  habilitar y configurar la IRQ ID 29
+2. CPU Interface (GICC) →  habilitar el core para recibir IRQs
+3. Private Timer       →  configurar período y habilitar la IRQ del timer
+```
+
+##### Configurar el Distributor (GICD)
+
+**Registros a configurar:**
+
+| Registro | Dirección | Qué hacer |
+|----------|-----------|-----------|
+| `ICDDCR` | `0xF8F01000` | Escribir `1` → habilitar el Distributor |
+| `ICDISERn` | `0xF8F01100 + (n*4)` | Setear el bit correspondiente a IRQ 29 |
+| `ICDIPRn` | `0xF8F01400 + (n*4)` | Asignar prioridad (ej. `0xA0`) al ID 29 |
+| `ICDIPTRn` | `0xF8F01800 + (n*4)` | Indicar a qué CPU se dirige (CPU0 = `0x01`) |
+
+> **Cálculo del índice:** Para IRQ ID `N`:
+> - Registro n = `N / 32`, bit = `N % 32` → para ICDISER
+> - Byte offset = `N` → para ICDIPR e ICDIPTR (1 byte por IRQ)
+
+**IRQ 29 en ICDISER:**
+- Registro: `ICDISER0` (`0xF8F01100`)
+- Bit a setear: `1 << 29`
+
+##### Configurar la CPU Interface (GICC)
+
+| Registro | Dirección | Qué hacer |
+|----------|-----------|-----------|
+| `ICCICR` | `0xF8F00100` | Escribir `1` → habilitar la CPU interface |
+| `ICCPMR` | `0xF8F00104` | Priority Mask: escribir `0xFF` para permitir todas las prioridades |
+
+> `ICCPMR` actúa como un umbral: solo pasan interrupciones con prioridad **menor** (numéricamente) al valor escrito. Con `0xFF` se habilitan todas.
+
+##### Configurar el Private Timer
+
+```c
+#define PTIMER_BASE     0xF8F00600
+#define PTIMER_LOAD     (*(volatile uint32_t*)(PTIMER_BASE + 0x00))
+#define PTIMER_COUNTER  (*(volatile uint32_t*)(PTIMER_BASE + 0x04))
+#define PTIMER_CONTROL  (*(volatile uint32_t*)(PTIMER_BASE + 0x08))
+#define PTIMER_ISR      (*(volatile uint32_t*)(PTIMER_BASE + 0x0C))
+
+void private_timer_init(uint32_t load_value) {
+    PTIMER_LOAD    = load_value;         // período
+    PTIMER_CONTROL = (0x00 << 8)  |     // prescaler = 0
+                     (1 << 2)     |     // IRQ enable
+                     (1 << 1)     |     // auto-reload
+                     (1 << 0);          // timer enable
+}
+```
+
+##### El handler de interrupción
+
+En el handler es **obligatorio**:
+1. Leer `GICC_IAR` (`0xF8F0010C`) para obtener el ID de la interrupción activa (y señalizar al GIC que fue tomada).
+2. Ejecutar la lógica de la aplicación.
+3. Limpiar el flag del timer: escribir `1` en `PTIMER_ISR`.
+4. Escribir el mismo ID en `GICC_EOIR` (`0xF8F00110`) para el End Of Interrupt.
+
+```c
+void IRQ_Handler(void) {
+    uint32_t irq_id = GICC_IAR;          // ACK → obtiene ID (29)
+
+    if ((irq_id & 0x3FF) == 29) {        // máscara de 10 bits
+        // ... lógica de la aplicación ...
+        PTIMER_ISR = 1;                  // W1C: limpiar flag del timer
+    }
+
+    GICC_EOIR = irq_id;                  // EOI → liberar al GIC
+}
+```
+
+> ⚠️ Si se omite el EOI, el GIC considera la interrupción como todavía activa y no entregará nuevas interrupciones de igual o menor prioridad. En QEMU esto se manifiesta como una sola interrupción recibida y luego silencio.
+
+---
+
+#### Mapa de registros resumido
+
+```
+0xF8F00000  ┌──────────────────────────┐
+            │   CPU Interface (GICC)   │
+0xF8F00100  │   GICC_CTLR              │  Enable CPU interface
+0xF8F00104  │   GICC_PMR               │  Priority mask
+0xF8F0010C  │   GICC_IAR               │  Interrupt ACK (read)
+0xF8F00110  │   GICC_EOIR              │  End Of Interrupt (write)
+            ├──────────────────────────┤
+0xF8F00600  │   Private Timer          │
+0xF8F00600  │   PTIMER_LOAD            │  Valor de recarga
+0xF8F00604  │   PTIMER_COUNTER         │  Valor actual
+0xF8F00608  │   PTIMER_CONTROL         │  Enable / IRQ / prescaler
+0xF8F0060C  │   PTIMER_ISR             │  Flag de evento (W1C)
+            ├──────────────────────────┤
+0xF8F01000  │   Distributor (GICD)     │
+0xF8F01000  │   GICD_CTLR              │  Enable distributor
+0xF8F01100  │   GICD_ISENABLER0        │  Enable IRQs 0–31
+0xF8F01420  │   GICD_IPRIORITYR7       │  Prioridad IRQ 28–31
+0xF8F01820  │   GICD_ITARGETSR7        │  Target CPU IRQ 28–31
+            └──────────────────────────┘
+```
+
+> El offset exacto de los registros de prioridad y target para IRQ 29:
+> - `GICD_IPRIORITYR`: base `0x400` + byte `29` → `0xF8F0141D`
+> - `GICD_ITARGETSR`: base `0x800` + byte `29` → `0xF8F0181D`
+
+---
+
+
+### Verificaciones previas.
+
 Verificamos si qemu puede emular correctamente los recursos que planteamos
 De acuerdo con el Technical Reference de Zynq-7000, la dirección Base del Mapa de Registros Privados de la CPU  es 0xF8900000. Nuestro interés en particular es a partir de 0xF8F00000, en donde se encuentran los registros de 
 * SCU
@@ -514,7 +740,7 @@ Eso significa que QEMU está implementando correctamente el bloque privado del C
 
 ---
 #### Conclusión
-Ya tenemos evidencia suficiente para arrancar TP3.1 en forma segura.
+Ya tenemos suficiente seguridad para abordar el TP3.1 con la seguridad que el hardware está correctamente emulado en **`qemu`**.
 
 ---
 
@@ -564,217 +790,6 @@ src/
     start.S
     kernel.c
 ```
-#### Manejo del Hardware 
-Esto es lo novedoso en este punto de nuestro proyecto. Comenzamos a trabajar con el sistema de Entrada/Salida.
-Iniciamos con dos dispositivos: el Private Timer del Cortex A9, al que configuraremos con el objetivo que genere una interrupción **`IRQ`** en forma periódica, y el _Generic Interrupt Controller_ de ARM, de ahora en mas el **GIC**, que gestionará, la interrupción del Private Timer, y en la medida en que vayamos incorporando nuevos dispositivos de E/S, gestionará además sus interrupciones.
-
-##### ¿Qué es el GIC?
-
-El **GIC** es el Controlador de Interrupciones que ARM diseña para sus procesadores. El rol de un controlador de interrupciones, es centralizar la gestión de todas las interrupciones de un sistema de cómputo. En el Zynq-7000, el **GIC** implementa la especificación **ARM GICv1**. 
-
-Su función es actuar como árbitro entre las fuentes de interrupción de los dispositivos de hardware y la/s CPU del sistema. Sin él, cada periférico necesitaría su propio mecanismo de señalización hacia la/s CPU. Y la/s CPU necesitaría/n una cantidad enorme de entradas de interrupción mas la lógica para gestionarlas. Inviable.
-
-Se trata de un periférico más del sistema de E/S, pero su rol lo convierte en un periférico escencial dentro de cualquier sistema de cómputo. Como cualquier periférico, el **GIC** requiere ser inicializado, antes de ponerse en operación y una vez operativo, permite ser controlado y monitoreado por parte del software de gestión. Para ello tiene una cantidad de registros definidos en la espcificación. Xilinx, fabricante del Zynq-7000 lo mapea a partir de la dirección base `0xF8F00000`.
-
-El **GIC** está organizado en dos bloque funcionales perfectmente diferenciados:
-```
-Periféricos / Timers / GPIO / ...
-         │
-         ▼
-   ┌─────────────┐
-   │ Distributor │   ← Decide qué interrupciones están habilitadas
-   │   (GICD)    │     y a qué CPU se dirigen
-   └──────┬──────┘
-          │
-   ┌──────▼──────┐
-   │CPU Interface│   ← Cada núcleo tiene la suya propia
-   │   (GICC)    │     Negocia prioridad, ACK, EOI
-   └─────────────┘
-         │
-         ▼
-      CPU Core
-```
-El **GIC** como se ve en el gráfico anterior se divide en dos partes. 
-###### Distributor — GICD (`0xF8F01000`)
-El Distributor es **global**, esto es, está compartido por todos los procesadores del sistema. En el caso del Zync-7000, por ambos cores A9. Es responsable de:
-- Habilitar/deshabilitar interrupciones individuales
-- Asignar prioridades
-- Dirigir cada interrupción a uno o ambos cores (en la jerga del **GIC** denominado target)
-- Clasificar el modo de disparo de las entradas de interrupción (nivel / flanco)
-###### CPU Interface — GICC (`0xF8F00100`)
-La CPU Interface es **privada por core**. Es responsable de:
-- Habilitar la recepción de interrupciones en ese core
-- Establecer el umbral de prioridad mínima
-- Proveer el ID de la interrupción activa (normalmente a requerimiento del handler)
-- Recibir el **EOI** (End Of Interrupt) para liberar la línea de interrupción
-###### Tipos de interrupción según el GIC
-
-| Tipo | Sigla | Rango de IDs | Descripción |
-|------|-------|--------------|-------------|
-| Software Generated | SGI | 0–15 | Inter-CPU, generadas por software |
-| Private Peripheral | PPI | 16–31 | Privadas de cada core (timers, watchdog) |
-| Shared Peripheral | SPI | 32–1019 | Periféricos del SoC (UART, Ethernet, etc.) |
-
-> :bangbang: **El Private Timer del Cortex-A9 usa la interrupción ID 29 (PPI).**
-
-##### El Private Timer del Cortex-A9
-
-Cada core A9 tiene su propio timer privado. Sus registros se definen en el Technical Reference del Cortex-A9. En el Zynq-7000 se los ubica a partir de la Base address: **`0xF8F00600`**
-
-Características principales:
-- Clock: operan a la mitad del clock de la CPU (`CPU_3x2x / 2`)
-- Cuenta descendente (*count-down*), es decir, se decrementan por cada clock de entrada
-- Como consecuencia de la carectarística anterior, genera la interrupción **ID 29** al llegar a **cero**
-- Puede operar en modo **one-shot** o **auto-reload**
-
-###### Registros del Private Timer
-
-| Offset | Nombre | Descripción |
-|--------|--------|-------------|
-| `0x00` | `PTIMER_LOAD` | Valor de recarga. Se copia en el counter al inicio o al llegar a 0 en auto-reload |
-| `0x04` | `PTIMER_COUNTER` | Valor actual del contador (se decrementa) |
-| `0x08` | `PTIMER_CONTROL` | Control: enable, auto-reload, IRQ enable, prescaler |
-| `0x0C` | `PTIMER_ISR` | Interrupt Status: bit 0 = evento pendiente. **Escribir 1 para limpiar** (W1C) |
-
-###### PTIMER_CONTROL 
-En el Technical Reference del Cortex A9 se lo denomina **_Private Timer Control Register_**. Su bit layout es el siguiente:
-```
-[31:16] UNK/SBZP     — UNKnown on reads, Should-Be-Zero-or-Preserved on writes. 
-[15:8]  PRESCALER    — Divisor adicional del clock (0 = sin división)
-[7:3]   UNK/SBZP     — UNKnown on reads, Should-Be-Zero-or-Preserved on writes.
-[2]     IRQ_ENABLE   — 1: genera interrupción al llegar a 0
-[1]     AUTO_RELOAD  — 1: recarga automática desde PTIMER_LOAD
-[0]     TIMER_ENABLE — 1: activa el contador
-```
-###### PTIMER_ISR 
-En el Technical Reference del Cortex A9 se lo denomina **_Private Timer Interrupt Status Register_**. Su bit layout es el siguiente:
-```
-[31:1] UNK/SBZP   — UNKnown on reads, Should-Be-Zero-or-Preserved on writes. 
-[0]    Event Flag — Es un bit persistente que se activa automáticamente cuando el registro del contador 
-                    llega a cero. Si la interrupción del Private Timer está habilitada, la interrupción con 
-                    ID 29 toma estado pendiente en el distribuidor de interrupciones después de que 
-                    se active el Event Flag. El Event Flag se borra cuando se escribe en 1.
-```
-###### PTIMER_LOAD
-En el Technical Reference del Cortex-A9 se lo denomina **_Private Timer Load Register_**. Contiene el valor copiado al **_Primary Timer Counter Register_** cuando este llega a cero con el modo de recarga automática habilitado. Escribir en este registro significa escribir tambien en **_Primary Timer Counter Register_**.
-
-###### PTIMER_COUNTER
-El Tecnical Reference del Cortex A9 lo refiere como **_Primary Timer Counter Register_**, y su principal característica es que es un contador decreciente. Para ello es necesario habilitarlo mediante el bit [0] del **_Private Timer Control Register_**. Si el procesador Cortex-A9 está en estado debug, el contador solo decrementa cuando el procesador vuelve al estado normal.
-Cuando el **_Primary Timer Counter Register_** llega a cero y el se habilitó el modo Auto reload, recarga el valor en el **_Private Timer Load Register_** y continúa decrementando desde ese valor. Si el modo Auto reload no está habilitado, al  llegar a cero, se detiene.
-Cuando el **_Private Timer Load Register_** llega a cero, si la generación de interrupciones está habilitada en el bit [2] del **_Private Timer Control Register_**, se activa el Event Flag del **_Private Timer Interrupt Status Register_**, y la interrupción con ID 29 toma estado Pendiente en el Distribuidor del **GIC**, .
-Escribir en el **_Primary Timer Counter Register_** o en el **_Private Timer Load Register_**, fuerza al primero a decrementar desde el valor recién escrito.
-
----
-
-##### Secuencia de configuración
-
-Para tener el Private Timer generando interrupciones, hay que configurar **tres capas** en orden:
-
-```
-1. Distributor (GICD)  →  habilitar y configurar la IRQ ID 29
-2. CPU Interface (GICC) →  habilitar el core para recibir IRQs
-3. Private Timer       →  configurar período y habilitar la IRQ del timer
-```
-
-###### Configurar el Distributor (GICD)
-
-**Registros a configurar:**
-
-| Registro | Dirección | Qué hacer |
-|----------|-----------|-----------|
-| `ICDDCR` | `0xF8F01000` | Escribir `1` → habilitar el Distributor |
-| `ICDISERn` | `0xF8F01100 + (n*4)` | Setear el bit correspondiente a IRQ 29 |
-| `ICDIPRn` | `0xF8F01400 + (n*4)` | Asignar prioridad (ej. `0xA0`) al ID 29 |
-| `ICDIPTRn` | `0xF8F01800 + (n*4)` | Indicar a qué CPU se dirige (CPU0 = `0x01`) |
-
-> **Cálculo del índice:** Para IRQ ID `N`:
-> - Registro n = `N / 32`, bit = `N % 32` → para ICDISER
-> - Byte offset = `N` → para ICDIPR e ICDIPTR (1 byte por IRQ)
-
-**IRQ 29 en ICDISER:**
-- Registro: `ICDISER0` (`0xF8F01100`)
-- Bit a setear: `1 << 29`
-
-### 5.2 Configurar la CPU Interface (GICC)
-
-| Registro | Dirección | Qué hacer |
-|----------|-----------|-----------|
-| `ICCICR` | `0xF8F00100` | Escribir `1` → habilitar la CPU interface |
-| `ICCPMR` | `0xF8F00104` | Priority Mask: escribir `0xFF` para permitir todas las prioridades |
-
-> `ICCPMR` actúa como un umbral: solo pasan interrupciones con prioridad **menor** (numéricamente) al valor escrito. Con `0xFF` se habilitan todas.
-
-###### Configurar el Private Timer
-
-```c
-#define PTIMER_BASE     0xF8F00600
-#define PTIMER_LOAD     (*(volatile uint32_t*)(PTIMER_BASE + 0x00))
-#define PTIMER_COUNTER  (*(volatile uint32_t*)(PTIMER_BASE + 0x04))
-#define PTIMER_CONTROL  (*(volatile uint32_t*)(PTIMER_BASE + 0x08))
-#define PTIMER_ISR      (*(volatile uint32_t*)(PTIMER_BASE + 0x0C))
-
-void private_timer_init(uint32_t load_value) {
-    PTIMER_LOAD    = load_value;         // período
-    PTIMER_CONTROL = (0x00 << 8)  |     // prescaler = 0
-                     (1 << 2)     |     // IRQ enable
-                     (1 << 1)     |     // auto-reload
-                     (1 << 0);          // timer enable
-}
-```
-
-###### El handler de interrupción
-
-En el handler es **obligatorio**:
-1. Leer `GICC_IAR` (`0xF8F0010C`) para obtener el ID de la interrupción activa (y señalizar al GIC que fue tomada).
-2. Ejecutar la lógica de la aplicación.
-3. Limpiar el flag del timer: escribir `1` en `PTIMER_ISR`.
-4. Escribir el mismo ID en `GICC_EOIR` (`0xF8F00110`) para el End Of Interrupt.
-
-```c
-void IRQ_Handler(void) {
-    uint32_t irq_id = GICC_IAR;          // ACK → obtiene ID (29)
-
-    if ((irq_id & 0x3FF) == 29) {        // máscara de 10 bits
-        // ... lógica de la aplicación ...
-        PTIMER_ISR = 1;                  // W1C: limpiar flag del timer
-    }
-
-    GICC_EOIR = irq_id;                  // EOI → liberar al GIC
-}
-```
-
-> ⚠️ Si se omite el EOI, el GIC considera la interrupción como todavía activa y no entregará nuevas interrupciones de igual o menor prioridad. En QEMU esto se manifiesta como una sola interrupción recibida y luego silencio.
-
----
-
-## 6. Mapa de registros resumido
-
-```
-0xF8F00000  ┌──────────────────────────┐
-            │   CPU Interface (GICC)   │
-0xF8F00100  │   GICC_CTLR              │  Enable CPU interface
-0xF8F00104  │   GICC_PMR               │  Priority mask
-0xF8F0010C  │   GICC_IAR               │  Interrupt ACK (read)
-0xF8F00110  │   GICC_EOIR              │  End Of Interrupt (write)
-            ├──────────────────────────┤
-0xF8F00600  │   Private Timer          │
-0xF8F00600  │   PTIMER_LOAD            │  Valor de recarga
-0xF8F00604  │   PTIMER_COUNTER         │  Valor actual
-0xF8F00608  │   PTIMER_CONTROL         │  Enable / IRQ / prescaler
-0xF8F0060C  │   PTIMER_ISR             │  Flag de evento (W1C)
-            ├──────────────────────────┤
-0xF8F01000  │   Distributor (GICD)     │
-0xF8F01000  │   GICD_CTLR              │  Enable distributor
-0xF8F01100  │   GICD_ISENABLER0        │  Enable IRQs 0–31
-0xF8F01420  │   GICD_IPRIORITYR7       │  Prioridad IRQ 28–31
-0xF8F01820  │   GICD_ITARGETSR7        │  Target CPU IRQ 28–31
-            └──────────────────────────┘
-```
-
-> El offset exacto de los registros de prioridad y target para IRQ 29:
-> - `GICD_IPRIORITYR`: base `0x400` + byte `29` → `0xF8F0141D`
-> - `GICD_ITARGETSR`: base `0x800` + byte `29` → `0xF8F0181D`
-
 ---
 
 #### Macros
@@ -795,7 +810,6 @@ De este modo, la instrucción siguiente que proporciona acceso al registro de ca
 ```c
 REG32(PTIMER_BASE + PTIMER_LOAD_OFFSET) = 1000000;
 ```
-
 puede interpretarse conceptualmente en cuatro pasos:
 
 1. Se calcula la dirección del registro `LOAD` del timer sumando la dirección base del periférico y el desplazamiento (*offset*) correspondiente al archivo particular.
