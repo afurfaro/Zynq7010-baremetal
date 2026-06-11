@@ -146,7 +146,10 @@ En una implementación multiprocesador, **`ICDISER0`** se banquea para cada proc
 [31:0]  Set-enable bits   │      1 Interrupción correspondiente habilitada.
                           │  Escritura:
                           │      0 No tiene efecto.
-                          │      1 Habilita la interrupción correspondinente. La subsiguiente lectura de este bit retorna el valor 1.
+                          │      1 Habilita la interrupción correspondinente. La subsiguiente lectura de este bit retorna 
+                                   el valor 1.
+
+
 Para las SGIs el comportamiento de este bit en lecturas y escrituras es implementación dependiente.
 ```
 Para un interrupt ID = N, y si  DIV y MOD representan las operaciones de división entera y módulo se tiene:
@@ -157,6 +160,44 @@ Para un interrupt ID = N, y si  DIV y MOD representan las operaciones de divisi�
 Al arranque y luego de un reset, un procesador puede usar este registro para determinar qué interrupt ID de periféricos admite el** GIC**.
 
 **_Nota_**: Deshabilitar una interrupción solo desactiva su envío a cualquier CPU interface. No impide que la interrupción cambie de estado, por ejemplo, que pase a estar pendiente o activa y pendiente si ya está activa.
+
+###### Interrupt Priority Registers (ICDIPRn)
+Los registros **ICDIPR** proporcionan un campo de prioridad de 8 bits para cada interrupción compatible con el **GIC**. Este campo almacena la prioridad de la interrupción correspondiente.
+* Estos registros son accesibles por byte.
+* Un campo de registro correspondiente a una interrupción no implementada es RAZ/WI (Read As Zero/Write Ignored).
+* Un **GIC** puede implementar menos de 8 bits de prioridad, pero debe implementar al menos los bits [7:4] de cada campo. En cada campo, los bits no implementados son RAZ/WI.
+La implementación define si el cambio del valor de un campo de prioridad modifica la prioridad de una interrupción activa. 
+
+Configuraciones
+
+Estos registros están disponibles en todas las configuraciones del **GIC**. Si el **GIC** implementa las Extensiones de Seguridad, estos registros son comunes.
+
+El número de **ICDIPR** implementados es **(8 * (`ICDICTR.ITLinesNumber` + 1))**,c ver **Interrupt Controller Type Register (ICDICTR)**. Los **ICDIPR** implementados se numeran a partir de **ICDIPR0**.
+
+En una implementación multiprocesador, los registros **ICDIPR0** a **ICDIPR7** se banquean por cada procesador conectado.Estos registros contienen los campos de Prioridad para las interrupciones 0-31.
+
+```
+[31:24]	Prioridad, 
+        byte offset 3	
+[23:16]	Prioridad, 
+        byte offset 2
+                          Cada campo de prioridad mantiene un valor de prioridad de un rago "implementation defined". A menor valor, mayor prioridad para la correspondente interrupción.
+[15:8]	Prioridad, 
+        byte offset 1
+[7:0]	  Prioridad, 
+        byte offset 0
+```
+Para un interrupt ID N, si DIV y MOD representan las operaciones de división entera y módulo se tiene:
+* El número M del **ICDIPR** correspondiente, se obtiene mediante **M = N DIV 4**.
+* El Offset del **ICDIPR** requerido respecto de la dirección Base del Distributor,  es **(0x400 + (4*M))**.
+* El byte offset del campo de Prioridad requerido en este registro es **N MOD 4**, donde:
+  - El byte offset 0 corresponde a los bits [7:0] del registro.
+  - El byte offset 1 corresponde a los bits [15:8] del registro.
+  - El byte offset 2 corresponde a los bits [23:16] del registro.
+  - El byte offset 3 corresponde a los bits [31:24] del registro.
+
+###### Interrupt Processor Targets Registers (ICDIPTRn)
+
 
 ##### Registros de la CPU Interface
 La misma aclaración vale para los registros de la/s CPU Interface:
