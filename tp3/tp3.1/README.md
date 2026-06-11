@@ -100,6 +100,9 @@ La misma aclaración vale para los registros de la/s CPU Interface:
 | Offset |  Name  | Type |   Reset  | Description |
 |--------|--------|------|----------|-------------|
 | 0x00	| ICCICR	| RW	| 0x00000000	| CPU Interface Control Register |
+| 0x04	| ICCPMR	| RW	| 0x0000 0000	| Interrupt Priority Mask Register |
+| 0x0C	| ICCIAR	| RO	| 0x0000 03FF	| Interrupt Acknowledge Register | 
+| 0x10	| ICCEOIR	| WO	|  -	| End of Interrupt Register |
 
 #### El Private Timer del Cortex-A9
 
