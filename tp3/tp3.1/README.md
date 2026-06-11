@@ -224,19 +224,12 @@ En una implementación multiprocesador, los registros **ICDIPTR0** a **ICDIPTR7*
 |Valor del campo CPU targets	| Interrupt targets |
 |-----------------------------|-----------------|
 |0bxxxx xxx1 |	CPU interface 0 |
-|-----------|------------------------------------|
 |0bxxxx xx1x |	CPU interface 1 |
-|-----------|------------------------------------|
 |0bxxxx x1xx |	CPU interface 2 |
-|-----------|------------------------------------|
 |0bxxxx 1xxx |	CPU interface 3 |
-|-----------|------------------------------------|
 |0bxxx1 xxxx |	CPU interface 4 |
-|-----------|------------------------------------|
 |0bxx1x xxxx |	CPU interface 5 |
-|-----------|------------------------------------|
 |0bx1xx xxxx |	CPU interface 6 |
-|-----------|------------------------------------|
 |0b1xxx xxxx |	CPU interface 7 |
 
 ##### Registros de la CPU Interface
