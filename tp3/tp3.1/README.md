@@ -93,6 +93,16 @@ El Distributor tiene varios registros memory mapped. Vamos a describir lso que s
 |0x400-0x7F8 | ICDIPR | RW  |0x00000000| Interrupt Priority Registers |
 |0x800-0x81C | ICDIPTR| RO  |Impl. def.| Interrupt Processor Targets Registers|
 
+###### Distributor Control Register (ICDDCR)
+Permite el envío de interrupciones pendientes a las interfaces de la CPU.
+```
+[31:1]    -      — Reservados. 
+[0]     ENABLE   — 0: El GIC ignora todas las señales de interrupción de los periféricos 
+                      y no reenvía las interrupciones pendientes a las interfaces de la CPU.
+                   1: El GIC monitorea las señales de interrupción de los periféricos y envía 
+                      las interrupciones pendientes a las interfaces de la CPU.
+```
+
 
 ##### Registros de la CPU Interface
 La misma aclaración vale para los registros de la/s CPU Interface:
@@ -100,9 +110,9 @@ La misma aclaración vale para los registros de la/s CPU Interface:
 | Offset |  Name  | Type |   Reset  | Description |
 |--------|--------|------|----------|-------------|
 | 0x00	| ICCICR	| RW	| 0x00000000	| CPU Interface Control Register |
-| 0x04	| ICCPMR	| RW	| 0x0000 0000	| Interrupt Priority Mask Register |
-| 0x0C	| ICCIAR	| RO	| 0x0000 03FF	| Interrupt Acknowledge Register | 
-| 0x10	| ICCEOIR	| WO	|  -	| End of Interrupt Register |
+| 0x04	| ICCPMR	| RW	| 0x00000000	| Interrupt Priority Mask Register |
+| 0x0C	| ICCIAR	| RO	| 0x000003FF	| Interrupt Acknowledge Register | 
+| 0x10	| ICCEOIR	| WO	|      -	| End of Interrupt Register |
 
 #### El Private Timer del Cortex-A9
 
