@@ -377,14 +377,43 @@ Escribir en el **_Primary Timer Counter Register_** o en el **_Private Timer Loa
 
 ---
 
-#### Secuencia de configuración
-
-Para tener el Private Timer generando interrupciones, hay que configurar **tres capas** en orden:
+#### Mapa de registros resumido
 
 ```
-1. Distributor (GICD)  →  habilitar y configurar la IRQ ID 29
-2. CPU Interface (GICC) →  habilitar el core para recibir IRQs
-3. Private Timer       →  configurar período y habilitar la IRQ del timer
+0xF8F00000  ┌──────────────────────────┐
+            │   CPU Interface (GICC)   │
+0xF8F00100  │   ICCICR                 │  Enable CPU interface
+0xF8F00104  │   ICCPMR                 │  Priority mask
+0xF8F0010C  │   ICCIAR                 │  Interrupt ACK (read)
+0xF8F00110  │   ICCEOIR                │  End Of Interrupt (write)
+            ├──────────────────────────┤
+0xF8F00600  │   Private Timer          │
+0xF8F00600  │   PTIMER_LOAD            │  Valor de recarga
+0xF8F00604  │   PTIMER_COUNTER         │  Valor actual
+0xF8F00608  │   PTIMER_CONTROL         │  Enable / IRQ / prescaler
+0xF8F0060C  │   PTIMER_ISR             │  Flag de evento (W1C)
+            ├──────────────────────────┤
+0xF8F01000  │   Distributor (GICD)     │
+0xF8F01000  │   ICDDCR                 │  Enable distributor
+0xF8F01100  │   ICDISER0               │  Enable IRQs 0–31
+0xF8F01420  │   ICDIPR7                │  Prioridad IRQ 28–31
+0xF8F01820  │   ICDIPTR7               │  Target CPU IRQ 28–31
+            └──────────────────────────┘
+```
+
+> El offset exacto de los registros de prioridad y target para IRQ 29:
+> - `GICD_IPRIORITYR`: base `0x400` + byte `29` → `0xF8F0141D`
+> - `GICD_ITARGETSR`: base `0x800` + byte `29` → `0xF8F0181D`
+
+---
+
+#### Secuencia de configuración
+Para lograr que el Private Timer genere interrupciones de manera periódica, hay que configurar **tres capas** en estricto orden:
+
+```
+1. Distributor   →  habilitar y configurar la IRQ ID 29
+2. CPU Interface →  habilitar el core para recibir IRQs
+3. Private Timer →  configurar período y habilitar la IRQ del timer
 ```
 
 ##### Configurar el Distributor (GICD)
@@ -456,37 +485,88 @@ void IRQ_Handler(void) {
 
 > ⚠️ Si se omite el EOI, el GIC considera la interrupción como todavía activa y no entregará nuevas interrupciones de igual o menor prioridad. En QEMU esto se manifiesta como una sola interrupción recibida y luego silencio.
 
----
-
-#### Mapa de registros resumido
-
-```
-0xF8F00000  ┌──────────────────────────┐
-            │   CPU Interface (GICC)   │
-0xF8F00100  │   ICCICR                 │  Enable CPU interface
-0xF8F00104  │   ICCPMR                 │  Priority mask
-0xF8F0010C  │   ICCIAR                 │  Interrupt ACK (read)
-0xF8F00110  │   ICCEOIR                │  End Of Interrupt (write)
-            ├──────────────────────────┤
-0xF8F00600  │   Private Timer          │
-0xF8F00600  │   PTIMER_LOAD            │  Valor de recarga
-0xF8F00604  │   PTIMER_COUNTER         │  Valor actual
-0xF8F00608  │   PTIMER_CONTROL         │  Enable / IRQ / prescaler
-0xF8F0060C  │   PTIMER_ISR             │  Flag de evento (W1C)
-            ├──────────────────────────┤
-0xF8F01000  │   Distributor (GICD)     │
-0xF8F01000  │   ICDDCR                 │  Enable distributor
-0xF8F01100  │   ICDISER0               │  Enable IRQs 0–31
-0xF8F01420  │   ICDIPR7                │  Prioridad IRQ 28–31
-0xF8F01820  │   ICDIPTR7               │  Target CPU IRQ 28–31
-            └──────────────────────────┘
-```
-
-> El offset exacto de los registros de prioridad y target para IRQ 29:
-> - `GICD_IPRIORITYR`: base `0x400` + byte `29` → `0xF8F0141D`
-> - `GICD_ITARGETSR`: base `0x800` + byte `29` → `0xF8F0181D`
 
 ---
+
+### :hammer_and_wrench: Implementación
+
+#### :open_file_folder: Estructura del proyecto
+Este proyecto requiere organizar los fuentes en diferentes archivos, e introducir diversos headers para cada nuevo hardware que tengamos que incorporar, en donde se definan las macros.
+Esto es necesario a fin de elaborar una estructura escalable, ordenada, y fácilmente legible.
+Al tener ya multiples archivos fuente, para que el build sea ordenado deberíamos definir la estructura de directorios del proyecto de aqui en mas:
+```text
+.
+├── include/      # Archivos .h
+├── src/          # Archivos .c y .S
+├── obj/          # Objetos intermedios
+├── bin/          # kernel.elf, kernel.bin, kernel.map
+├── README.md     # Documentación
+├── Makefile      # Modificado para ingresar a cada subdirectorio
+└── linker.ld
+```
+
+#### Makefile
+Modificamos el Makefile sde manera consistente con esta nueva estructura.
+El nuevo Makefile tiene las siguientes características:
+
+✔️ Sólo creamos nuevos archivos en los subdirectorios  src/ e include/. 
+✔️ obj/ y bin/ se crean automáticamente si no existen (usando mkdir -p).
+✔️ Los .o se generan en el subdirectorio obj/, de modo qu eno se mezclan ya con los fuentes y demás archivos.
+✔️ kernel.elf, kernel.bin, kernel.map y kernel.lst se generan en el subdirectorio bin/.
+✔️ El linker utiliza linker.ld desde el directorio raíz.
+✔️ La regla clean elimina únicamente el contenido de los subdirectorios obj/ y bin/, sin tocar ningún archivo de los subdirectorios src/ ni include/.
+✔️ Las dependencias se generan automáticamente para recompilar sólo lo necesario cuando cambie un .h.
+✔️ Agregar nuevos .c o .S no requiere modificar el Makefile (esta funcionalidad ya estaba, simplemente se mantiene).
+
+#### Archivos fuente
+Los archivos **`start.S`** y **`kernel.c`** se mueven al subdirectorio **`src/`**. Se suman en dicho subdirectorio y en **`include/`** en donde ya tenemos **`armv7.inc`**.
+
+```text
+include/
+    armv7.inc
+    gic.h
+    timer.h
+    kernel.h
+
+src/
+    gic.c
+    timer.c
+    start.S
+    kernel.c
+```
+---
+
+#### Macros
+En los sistemas embedded es muy frecuente que los registros de control de los periféricos se accedan **mapeados en memoria ** (*memory mapped I/O*). Desde el punto de vista del procesador, un registro del timer o del controlador de interrupciones no es más que una dirección de memoria que se puede leer o escribir.
+Para facilitar la escritura del código definimos en **`kernel.h`** la siguiente macro:
+```c
+#define REG32(addr) (*(volatile uint32_t *)(addr))
+```
+Su funcionamiento puede comprenderse analizando la expresión de derecha a izquierda.
+En primer lugar, **`(uint32_t *)`** convierte (cast) el valor numérico **`addr`** en un **puntero a un entero no signado de 32 bits**. Es decir, el compilador dejará de interpretar **`addr`** como un simple número y pasa a tratarlo como una dirección de memoria a partir de la cual se encuentra almacenado un dato de 32 bits.
+
+El _keyword_ **`volatile`** antepuesto al cast, indica al compilador que el contenido de esa dirección puede cambiar por causas externas al programa, por ejemplo debido al hardware. Este es el comporatmiento típico de un dispositivo de E/S ya que por lo general pone disponible a la CPU datos que provienen desde el exterior. Esta _keyword_, hace que el compilador no optimice las lecturas ni las escrituras sobre ese registro, accediendo siempre a la dirección física correspondiente.
+
+Finalmente, el operador **`*`**, antepuesto a la expresión `(volatile uint32_t *)(addr)` desreferencia al puntero, es decir, permite acceder al contenido de la dirección **`addr`**. Como resultado, la macro definida como **`REG32(addr)`** se comporta exactamente igual que una variable de tipo **`uint32_t`**, y termina proporcionando el contenido de una dirección de memoria, aunque en realidad en esa dirección se encuentra mapeado un registro de hardware.
+
+Por medio de esta Macro genérica pueden definirse para cada dispositivo de hardware una macro para cada registro de modo de tratar a cada registro de hardware como una variable simple. Para el Private Timerdel Cortex-A9 lo hacemos en su archivo cabecera personalizado `timer.h`:
+
+```c
+#define PTIMER_LOAD            REG32(PTIMER_BASE + 0x00) /* Private Timer Load Register */
+
+```
+puede interpretarse conceptualmente en cuatro pasos:
+
+1. Se calcula la dirección del registro `LOAD` del timer sumando la dirección base del periférico y el desplazamiento (*offset*) correspondiente al archivo particular.
+2. Esa dirección se convierte en un puntero a entero de 32 bits.
+3. El puntero se desreferencia para acceder al contenido de esa posición de memoria.
+4. Se escribe el valor `1000000` en dicha dirección.
+
+En otras palabras, esta sentencia equivale a escribir directamente en un registro físico del timer. El hardware detecta esa escritura y actualiza internamente su registro `LOAD`. A partir de este momento, el procesador ya no está manipulando memoria RAM convencional, sino interactuando directamente con un periférico mediante el mismo mecanismo de acceso a memoria que utiliza para leer o escribir variables comunes y corrientes.
+
+---
+
+
 
 
 ### Verificaciones previas.
@@ -975,81 +1055,4 @@ Eso significa que QEMU está implementando correctamente el bloque privado del C
 ---
 #### Conclusión
 Ya tenemos suficiente seguridad para abordar el TP3.1 con la seguridad que el hardware está correctamente emulado en **`qemu`**.
-
----
-
-### :hammer_and_wrench: Implementación
-
-#### :open_file_folder: Estructura del proyecto
-Este proyecto requiere organizar los fuentes en diferentes archivos, e introducir diversos headers para cada nuevo hardware que tengamos que incorporar, en donde se definan las macros.
-Esto es necesario a fin de elaborar una estructura escalable, ordenada, y fácilmente legible.
-Al tener ya multiples archivos fuente, para que el build sea ordenado deberíamos definir la estructura de directorios del proyecto de aqui en mas:
-```text
-.
-├── include/      # Archivos .h
-├── src/          # Archivos .c y .S
-├── obj/          # Objetos intermedios
-├── bin/          # kernel.elf, kernel.bin, kernel.map
-├── README.md     # Documentación
-├── Makefile      # Modificado para ingresar a cada subdirectorio
-└── linker.ld
-```
-
-#### Makefile
-Modificamos el Makefile sde manera consistente con esta nueva estructura.
-El nuevo Makefile tiene las siguientes características:
-
-✔️ Sólo creamos nuevos archivos en los subdirectorios  src/ e include/. 
-✔️ obj/ y bin/ se crean automáticamente si no existen (usando mkdir -p).
-✔️ Los .o se generan en el subdirectorio obj/, de modo qu eno se mezclan ya con los fuentes y demás archivos.
-✔️ kernel.elf, kernel.bin, kernel.map y kernel.lst se generan en el subdirectorio bin/.
-✔️ El linker utiliza linker.ld desde el directorio raíz.
-✔️ La regla clean elimina únicamente el contenido de los subdirectorios obj/ y bin/, sin tocar ningún archivo de los subdirectorios src/ ni include/.
-✔️ Las dependencias se generan automáticamente para recompilar sólo lo necesario cuando cambie un .h.
-✔️ Agregar nuevos .c o .S no requiere modificar el Makefile (esta funcionalidad ya estaba, simplemente se mantiene).
-
-#### Archivos fuente
-Los archivos **`start.S`** y **`kernel.c`** se mueven al subdirectorio **`src/`**. Se suman en dicho subdirectorio y en **`include/`** en donde ya tenemos **`armv7.inc`**.
-
-```text
-include/
-    armv7.inc
-    gic.h
-    timer.h
-    kernel.h
-
-src/
-    gic.c
-    timer.c
-    start.S
-    kernel.c
-```
----
-
-#### Macros
-En los sistemas embedded es muy frecuente que los registros de control de los periféricos se accedan **mapeados en memoria ** (*memory mapped I/O*). Desde el punto de vista del procesador, un registro del timer o del controlador de interrupciones no es más que una dirección de memoria que se puede leer o escribir.
-Para facilitar la escritura del código definimos en **`kernel.h`** la siguiente macro:
-```c
-#define REG32(addr) (*(volatile uint32_t *)(addr))
-```
-Su funcionamiento puede comprenderse analizando la expresión de derecha a izquierda.
-En primer lugar, **`(uint32_t *)`** convierte el valor numérico **`addr`** en un **puntero a un entero no signado de 32 bits**. Es decir, el compilador deja de interpretar ese valor como un simple número y pasa a tratarlo como una dirección de memoria a partir de la cual se encuentra almacenado un dato de 32 bits.
-
-El _keyword_ **`volatile`** indica al compilador que el contenido de esa dirección puede cambiar por causas externas al programa, por ejemplo debido al hardware. Este es el comporatmiento típico de un dispositivo de E/S ya que por lo general pone disponible a la CPU datos que provienen desde el exterior. Esta _keyword_, hace que el compilador no optimice las lecturas ni las escrituras sobre ese registro, accediendo siempre a la dirección física correspondiente.
-
-Finalmente, el operador **`*`** desreferencia el puntero, es decir, permite acceder al contenido de la dirección **`addr`**. Como resultado, **`REG32(addr)`** se comporta exactamente igual que una variable de tipo **`uint32_t`**, ya que termina proporcionando el contenido de una dirección de memoria, aunque en realidad representa un registro de hardware.
-
-De este modo, la instrucción siguiente que proporciona acceso al registro de carga del Timer:
-
-```c
-REG32(PTIMER_BASE + PTIMER_LOAD_OFFSET) = 1000000;
-```
-puede interpretarse conceptualmente en cuatro pasos:
-
-1. Se calcula la dirección del registro `LOAD` del timer sumando la dirección base del periférico y el desplazamiento (*offset*) correspondiente al archivo particular.
-2. Esa dirección se convierte en un puntero a entero de 32 bits.
-3. El puntero se desreferencia para acceder al contenido de esa posición de memoria.
-4. Se escribe el valor `1000000` en dicha dirección.
-
-En otras palabras, esta sentencia equivale a escribir directamente en un registro físico del timer. El hardware detecta esa escritura y actualiza internamente su registro `LOAD`. A partir de este momento, el procesador ya no está manipulando memoria RAM convencional, sino interactuando directamente con un periférico mediante el mismo mecanismo de acceso a memoria que utiliza para leer o escribir variables comunes y corrientes.
 
