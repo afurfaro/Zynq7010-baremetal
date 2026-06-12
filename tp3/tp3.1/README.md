@@ -468,8 +468,15 @@ El _keyword_ **`volatile`** antepuesto al cast, indica al compilador que el cont
 
 Finalmente, el operador **`*`**, antepuesto a la expresión `(volatile uint32_t *)(addr)` desreferencia al puntero, es decir, permite acceder al contenido de la dirección **`addr`**. Como resultado, la macro definida como **`REG32(addr)`** se comporta exactamente igual que una variable de tipo **`uint32_t`**, y termina proporcionando el contenido de una dirección de memoria, aunque en realidad en esa dirección se encuentra mapeado un registro de hardware.
 
-Por medio de esta Macro genérica pueden definirse para cada dispositivo de hardware una macro para cada registro de modo de tratar a cada registro de hardware como una variable simple. Para el Private Timerdel Cortex-A9 lo hacemos en su archivo cabecera personalizado `timer.h`:
+Por medio de esta Macro genérica pueden definirse para cada dispositivo de hardware una macro para cada registro de modo de tratar a cada registro de hardware como una variable simple. Para el Private Timer del Cortex-A9 lo hacemos en su archivo cabecera personalizado `timer.h`:
 
+Para el manejo de bits introducimos dos macros en el archivo `kernel.h`:
+```c
+#define BIT(n)                (1U << (n))                   /*Construye una máscara*/
+#define SET_BIT(value, bit)   ((value) |  (1U << (bit)))    /*Setea bit dentro de reg*/
+#define CLR_BIT(value, bit)   ((value) & ~(1U << (bit)))    /*Limpia bit dentro de reg*/
+```
+Si bien parecen hacer lo mismo no es así. `BIT(n)` se encarga de construir una máscara. No la asigna por si solo. Por su parte `SET_BIT(reg,n)` establece en `'1'` el bit de orden `n` dentro del registro `reg`.Tanto `n`, como `reg` se le pasan como argumentos de modo que a diferencia de `BIT(n)`, es una asignación. Del mismo modo `CLR_BIT(reg,n)`, borrar un bit dentro de un registro.
 
 #### Secuencia de configuración
 Para lograr que el Private Timer genere interrupciones de manera periódica, hay que configurar **tres capas** en estricto orden:

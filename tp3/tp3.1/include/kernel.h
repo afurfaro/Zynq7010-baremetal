@@ -12,9 +12,9 @@
 /*------------------------------------------------*/
 /* Manipulación de bits                           */
 /*------------------------------------------------*/
-
-#define SET_BIT(value, bit)   ((value) |  (1U << (bit)))
-#define CLR_BIT(value, bit)   ((value) & ~(1U << (bit)))
+#define BIT(n)                (1U << (n))                   /*Construye una máscara*/
+#define SET_BIT(value, bit)   ((value) |  (1U << (bit)))    /*Setea bit dentro de reg*/
+#define CLR_BIT(value, bit)   ((value) & ~(1U << (bit)))    /*Limpia bit dentro de reg*/
 
 /* Variables globales del kernel (si las hubiera) */
 
