@@ -407,87 +407,6 @@ Escribir en el **_Primary Timer Counter Register_** o en el **_Private Timer Loa
 
 ---
 
-#### Secuencia de configuración
-Para lograr que el Private Timer genere interrupciones de manera periódica, hay que configurar **tres capas** en estricto orden:
-
-```
-1. Distributor   →  habilitar y configurar la IRQ ID 29
-2. CPU Interface →  habilitar el core para recibir IRQs
-3. Private Timer →  configurar período y habilitar la IRQ del timer
-```
-
-##### Configurar el Distributor (GICD)
-
-**Registros a configurar:**
-
-| Registro | Dirección | Qué hacer |
-|----------|-----------|-----------|
-| `ICDDCR` | `0xF8F01000` | Escribir `1` → habilitar el Distributor |
-| `ICDISERn` | `0xF8F01100 + (n*4)` | Setear el bit correspondiente a IRQ 29 |
-| `ICDIPRn` | `0xF8F01400 + (n*4)` | Asignar prioridad (ej. `0xA0`) al ID 29 |
-| `ICDIPTRn` | `0xF8F01800 + (n*4)` | Indicar a qué CPU se dirige (CPU0 = `0x01`) |
-
-> **Cálculo del índice:** Para IRQ ID `N`:
-> - Registro n = `N / 32`, bit = `N % 32` → para ICDISER
-> - Byte offset = `N` → para ICDIPR e ICDIPTR (1 byte por IRQ)
-
-**IRQ 29 en ICDISER:**
-- Registro: `ICDISER0` (`0xF8F01100`)
-- Bit a setear: `1 << 29`
-
-##### Configurar la CPU Interface (GICC)
-
-| Registro | Dirección | Qué hacer |
-|----------|-----------|-----------|
-| `ICCICR` | `0xF8F00100` | Escribir `1` → habilitar la CPU interface |
-| `ICCPMR` | `0xF8F00104` | Priority Mask: escribir `0xFF` para permitir todas las prioridades |
-
-> `ICCPMR` actúa como un umbral: solo pasan interrupciones con prioridad **menor** (numéricamente) al valor escrito. Con `0xFF` se habilitan todas.
-
-##### Configurar el Private Timer
-
-```c
-#define PTIMER_BASE     0xF8F00600
-#define PTIMER_LOAD     (*(volatile uint32_t*)(PTIMER_BASE + 0x00))
-#define PTIMER_COUNTER  (*(volatile uint32_t*)(PTIMER_BASE + 0x04))
-#define PTIMER_CONTROL  (*(volatile uint32_t*)(PTIMER_BASE + 0x08))
-#define PTIMER_ISR      (*(volatile uint32_t*)(PTIMER_BASE + 0x0C))
-
-void private_timer_init(uint32_t load_value) {
-    PTIMER_LOAD    = load_value;         // período
-    PTIMER_CONTROL = (0x00 << 8)  |     // prescaler = 0
-                     (1 << 2)     |     // IRQ enable
-                     (1 << 1)     |     // auto-reload
-                     (1 << 0);          // timer enable
-}
-```
-
-##### El handler de interrupción
-
-En el handler es **obligatorio**:
-1. Leer `GICC_IAR` (`0xF8F0010C`) para obtener el ID de la interrupción activa (y señalizar al GIC que fue tomada).
-2. Ejecutar la lógica de la aplicación.
-3. Limpiar el flag del timer: escribir `1` en `PTIMER_ISR`.
-4. Escribir el mismo ID en `GICC_EOIR` (`0xF8F00110`) para el End Of Interrupt.
-
-```c
-void IRQ_Handler(void) {
-    uint32_t irq_id = GICC_IAR;          // ACK → obtiene ID (29)
-
-    if ((irq_id & 0x3FF) == 29) {        // máscara de 10 bits
-        // ... lógica de la aplicación ...
-        PTIMER_ISR = 1;                  // W1C: limpiar flag del timer
-    }
-
-    GICC_EOIR = irq_id;                  // EOI → liberar al GIC
-}
-```
-
-> ⚠️ Si se omite el EOI, el GIC considera la interrupción como todavía activa y no entregará nuevas interrupciones de igual o menor prioridad. En QEMU esto se manifiesta como una sola interrupción recibida y luego silencio.
-
-
----
-
 ### :hammer_and_wrench: Implementación
 
 #### :open_file_folder: Estructura del proyecto
@@ -551,6 +470,51 @@ Finalmente, el operador **`*`**, antepuesto a la expresión `(volatile uint32_t 
 
 Por medio de esta Macro genérica pueden definirse para cada dispositivo de hardware una macro para cada registro de modo de tratar a cada registro de hardware como una variable simple. Para el Private Timerdel Cortex-A9 lo hacemos en su archivo cabecera personalizado `timer.h`:
 
+
+#### Secuencia de configuración
+Para lograr que el Private Timer genere interrupciones de manera periódica, hay que configurar **tres capas** en estricto orden:
+
+```
+1. Distributor   →  habilitar y configurar la IRQ ID 29
+2. CPU Interface →  habilitar el core para recibir IRQs
+3. Private Timer →  configurar período y habilitar la IRQ del timer
+```
+
+##### Configurar el Distributor (GICD)
+
+**Registros a configurar:**
+
+| Registro | Dirección | Qué hacer |
+|----------|-----------|-----------|
+| `ICDDCR` | `0xF8F01000` | Escribir `1` → habilitar el Distributor |
+| `ICDISERn` | `0xF8F01100 + (n*4)` | Setear el bit correspondiente a IRQ 29 |
+| `ICDIPRn` | `0xF8F01400 + (n*4)` | Asignar prioridad (ej. `0xA0`) al ID 29 |
+| `ICDIPTRn` | `0xF8F01800 + (n*4)` | Indicar a qué CPU se dirige (CPU0 = `0x01`) |
+
+> **Cálculo del índice:** Para IRQ ID `N`:
+> - Registro n = `N / 32`, bit = `N % 32` → para ICDISER
+> - Byte offset = `N` → para ICDIPR e ICDIPTR (1 byte por IRQ)
+
+**IRQ 29 en ICDISER:**
+- Registro: `ICDISER0` (`0xF8F01100`)
+- Bit a setear: `1 << 29`
+
+##### Configurar la CPU Interface (GICC)
+
+| Registro | Dirección | Qué hacer |
+|----------|-----------|-----------|
+| `ICCICR` | `0xF8F00100` | Escribir `1` → habilitar la CPU interface |
+| `ICCPMR` | `0xF8F00104` | Priority Mask: escribir `0xFF` para permitir todas las prioridades |
+
+> `ICCPMR` actúa como un umbral: solo pasan interrupciones con prioridad **menor** (numéricamente) al valor escrito. Con `0xFF` se habilitan todas.
+
+
+
+
+
+
+##### Configurar el Private Timer
+
 ```c
 #define PTIMER_BASE            0xF8F00600   /*Dirección Base del Private Timer*/
 
@@ -592,12 +556,36 @@ puede interpretarse conceptualmente en cuatro pasos:
 3. Cada puntero se desreferencia para acceder al contenido de esa posición de memoria, o sea de cada Registro de Hardware.  
 4. Se escribe el cada valor en dichas direcciones, o sea en los registros. Ejemplo `1000000` en el Load Register, ya que ese es el valor del argumento `load` recibido por la función de inciialización invocada desde kernel.c
 
-En otras palabras, esta sentencia equivale a escribir directamente en un registro físico del timer. El hardware detecta esa escritura y actualiza internamente su registro. 
+En otras palabras, esta sentencia equivale a escribir directamente en un registro físico del Private Timer. El hardware detecta esa escritura y actualiza internamente su registro. 
 
 > :bulb: El procesador no está manipulando memoria RAM convencional, sino interactuando directamente con un periférico mediante el mismo mecanismo de acceso a memoria que utiliza para leer o escribir variables comunes y corrientes.
 
 ---
+##### El handler de interrupción
 
+En el handler es **obligatorio**:
+1. Leer `GICC_IAR` (`0xF8F0010C`) para obtener el ID de la interrupción activa (y señalizar al GIC que fue tomada).
+2. Ejecutar la lógica de la aplicación.
+3. Limpiar el flag del timer: escribir `1` en `PTIMER_ISR`.
+4. Escribir el mismo ID en `GICC_EOIR` (`0xF8F00110`) para el End Of Interrupt.
+
+```c
+void IRQ_Handler(void) {
+    uint32_t irq_id = GICC_IAR;          // ACK → obtiene ID (29)
+
+    if ((irq_id & 0x3FF) == 29) {        // máscara de 10 bits
+        // ... lógica de la aplicación ...
+        PTIMER_ISR = 1;                  // W1C: limpiar flag del timer
+    }
+
+    GICC_EOIR = irq_id;                  // EOI → liberar al GIC
+}
+```
+
+> ⚠️ Si se omite el EOI, el GIC considera la interrupción como todavía activa y no entregará nuevas interrupciones de igual o menor prioridad. En QEMU esto se manifiesta como una sola interrupción recibida y luego silencio.
+
+
+---
 
 
 
