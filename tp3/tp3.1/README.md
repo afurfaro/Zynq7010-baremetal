@@ -312,6 +312,21 @@ Un procesador escribe en este registro para informar a la CPU Interface que ha c
                       En cualquier otro caso, SBZ.
 [9:0]     EOIINTID    El valor ACKINTID del  correspondiente acceso ICCIAR.
 ```
+Escribir en este registro hace que el **GIC** cambie el estado de la interrupción identificada:
+* a inactiva, si estaba activa;
+* a pendiente, si estaba activa y pendiente.
+
+La rutina de servicio de interrupción del procesador conectado debe escribir en el **`ICCEOIR`** por cada lectura de un Interrupt ID válido del **`ICCIAR`** (ver Registro de Reconocimiento de Interrupción [**`ICCIAR`**]). El valor escrito en el **`ICCEOIR`** debe ser el Interrupt ID leído del **`ICCIAR`**.
+
+**Nota:**
+Para garantizar la compatibilidad con posibles extensiones de la especificación de la arquitectura **GIC**, ARM recomienda que el software conserve el valor completo del registro leído del **`ICCIAR`** al reconocer la interrupción y que lo escriba de nuevo en el **`ICCEOIR`** una vez finalizado el procesamiento de la misma.
+
+Si una lectura del **`ICCIAR`** devuelve Interrupt ID espurio, el software no tiene que escribir en el **`ICCEOIR`**. Si el software escribe el Interrupt ID espurio en el **`ICCEOIR`**, el **GIC** ignora dicha escritura.
+
+Para interrupciones anidadas, el orden de finalización de la interrupción debe ser el inverso al orden de confirmación de la interrupción. Es decir, el orden de escritura en el **`ICCEOIR`** debe ser el inverso al orden de lectura del **`ICCIAR`**.
+
+Si los valores escritos en el **`ICCEOIR`** no coinciden con una interrupción activa, el efecto de la escritura es impredecible.
+
 
 #### El Private Timer del Cortex-A9
 
