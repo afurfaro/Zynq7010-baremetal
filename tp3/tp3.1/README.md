@@ -552,17 +552,49 @@ Finalmente, el operador **`*`**, antepuesto a la expresión `(volatile uint32_t 
 Por medio de esta Macro genérica pueden definirse para cada dispositivo de hardware una macro para cada registro de modo de tratar a cada registro de hardware como una variable simple. Para el Private Timerdel Cortex-A9 lo hacemos en su archivo cabecera personalizado `timer.h`:
 
 ```c
-#define PTIMER_LOAD            REG32(PTIMER_BASE + 0x00) /* Private Timer Load Register */
+#define PTIMER_BASE            0xF8F00600   /*Dirección Base del Private Timer*/
 
+#define PTIMER_LOAD            REG32(PTIMER_BASE + 0x00) /* Private Timer Load Register */
+#define PTIMER_COUNTER         REG32(PTIMER_BASE + 0x04) /* Private Timer Count Register */
+#define PTIMER_CONTROL         REG32(PTIMER_BASE + 0x08) /* Private Timer Control Register */
+#define PTIMER_ISR             REG32(PTIMER_BASE + 0x0C) /* Private Timer Interrupt Status Register */
+```
+Luego inicializar en el código los registros es tan simple como se muestra en el archivo `timer.c`.
+```c
+void timer_init(uint32_t load)
+{
+    /* Valor inicial del contador */
+
+    PTIMER_LOAD = load;
+
+    /*
+     * Control Register
+     *
+     * bit0 = ENABLE
+     * bit1 = AUTO_RELOAD
+     * bit2 = IRQ_ENABLE
+     * bits[15:8] = PRESCALER
+     */
+
+    PTIMER_CONTROL = (1 << 0) |
+                     (1 << 1) |
+                     (1 << 2);
+
+    /* Limpiar una posible interrupción pendiente */
+
+    PTIMER_ISR = 1;
+}
 ```
 puede interpretarse conceptualmente en cuatro pasos:
 
-1. Se calcula la dirección del registro `LOAD` del timer sumando la dirección base del periférico y el desplazamiento (*offset*) correspondiente al archivo particular.
-2. Esa dirección se convierte en un puntero a entero de 32 bits.
-3. El puntero se desreferencia para acceder al contenido de esa posición de memoria.
-4. Se escribe el valor `1000000` en dicha dirección.
+1. Se calcula la dirección del registro del timer sumando la dirección base del periférico `PTIMER_BASE`, y el desplazamiento (*offset*) correspondiente al registro particular. Por ejemplo para `LOAD` el offset es `0x00`, para `COUNTER` `0x04`, para `CONTROL` `0x08` y para `ISR` `0x0C`.
+2. Cada dirección se convierte en un puntero a entero de 32 bits.
+3. Cada puntero se desreferencia para acceder al contenido de esa posición de memoria, o sea de cada Registro de Hardware.  
+4. Se escribe el cada valor en dichas direcciones, o sea en los registros. Ejemplo `1000000` en el Load Register, ya que ese es el valor del argumento `load` recibido por la función de inciialización invocada desde kernel.c
 
-En otras palabras, esta sentencia equivale a escribir directamente en un registro físico del timer. El hardware detecta esa escritura y actualiza internamente su registro `LOAD`. A partir de este momento, el procesador ya no está manipulando memoria RAM convencional, sino interactuando directamente con un periférico mediante el mismo mecanismo de acceso a memoria que utiliza para leer o escribir variables comunes y corrientes.
+En otras palabras, esta sentencia equivale a escribir directamente en un registro físico del timer. El hardware detecta esa escritura y actualiza internamente su registro. 
+
+> :bulb: El procesador no está manipulando memoria RAM convencional, sino interactuando directamente con un periférico mediante el mismo mecanismo de acceso a memoria que utiliza para leer o escribir variables comunes y corrientes.
 
 ---
 
