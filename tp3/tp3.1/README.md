@@ -287,6 +287,31 @@ El handler de interrupción que ejecuta el procesador lee este registro para obt
                       Para todas las demás interrupciones, este campo es RAZ (Read As Zero).
 [9:0]      ACKINTID   El Interrupt ID.
 ```
+Una lectura del **`ICCIAR`** devuelve el Interrupt ID de la interrupción pendiente de mayor prioridad para la CPU Interface. Devuelve un Interrupt ID espúreo (1023) si se cumple alguna de las siguientes condiciones:
+* La señalización de interrupciones a la interfaz de la CPU está deshabilitada.
+* No hay ninguna interrupción pendiente en esta CPU Interface con la prioridad suficiente para que la interfaz la envíe al procesador.
+
+**Nota:**
+La siguiente secuencia de eventos es un ejemplo de cuándo el **GIC** devuelve un Interrupt ID igual a 1023, y muestra cómo las lecturas del **`ICCIAR`** pueden ser críticas en cuanto a la temporización:
+1. Un periférico activa una interrupción por su terminal configurado como activo por nivel.
+2. La interrupción tiene prioridad suficiente y, por lo tanto, el **GIC** la envía al procesador target.
+3. El periférico desactiva la interrupción (baja el nivel en el terminal de interrupción del Distributor). Dado que no hay ninguna otra interrupción pendiente con prioridad suficiente, el **GIC** desactiva la solicitud de interrupción al procesador.
+4. Antes de que el procesador target haya reconocido la desactivación de la solicitud de interrupción del paso anterior, lee el **`ICCIAR`**. Como no hay ninguna interrupción con prioridad suficiente para enviar al procesador, el **GIC** devuelve el Interrupt ID erróneo de 1023.
+Un Interrupt ID no espurio devuelto por una lectura del **`ICCIAR`** se denomina Interrupt ID válido.
+
+Cuando el **GIC** devuelve un Interrupt ID válido a una lectura del **`ICCIAR`**, la lectura se interpreta como una confirmación de dicha interrupción y, como efecto secundario, cambia el estado de la interrupción de pendiente a activa, o a activa y pendiente si el estado pendiente persiste. Normalmente, el estado pendiente de una interrupción persiste solo si la entrada de interrupción es activa por nivel y permanece activa.
+
+Por cada lectura de un interpreta válido del **`ICCIAR`**, la rutina de servicio de interrupción del procesador conectado debe realizar una escritura correspondiente en el **`ICCEOIR`** (véase Registro de Fin de Interrupción (ICCEOIR)).
+
+###### End of Interrupt Register (ICCEOIR)
+Un procesador escribe en este registro para informar a la CPU Interface que ha completado su rutina de servicio de interrupción para la interrupción especificada.
+```
+[31:13]       -       Reserved.
+[12:10]     CPUID     En una implementación multiprocesador, al finalizar el procesamiento de un
+                      SGI, este campo contiene el valor CPUID del acceso ICCIAR correspondiente.
+                      En cualquier otro caso, SBZ.
+[9:0]     EOIINTID    El valor ACKINTID del  correspondiente acceso ICCIAR.
+```
 
 #### El Private Timer del Cortex-A9
 
