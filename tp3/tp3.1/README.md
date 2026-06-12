@@ -463,10 +463,10 @@ void IRQ_Handler(void) {
 ```
 0xF8F00000  ┌──────────────────────────┐
             │   CPU Interface (GICC)   │
-0xF8F00100  │   GICC_CTLR              │  Enable CPU interface
-0xF8F00104  │   GICC_PMR               │  Priority mask
-0xF8F0010C  │   GICC_IAR               │  Interrupt ACK (read)
-0xF8F00110  │   GICC_EOIR              │  End Of Interrupt (write)
+0xF8F00100  │   ICCICR                 │  Enable CPU interface
+0xF8F00104  │   ICCPMR                 │  Priority mask
+0xF8F0010C  │   ICCIAR                 │  Interrupt ACK (read)
+0xF8F00110  │   ICCEOIR                │  End Of Interrupt (write)
             ├──────────────────────────┤
 0xF8F00600  │   Private Timer          │
 0xF8F00600  │   PTIMER_LOAD            │  Valor de recarga
@@ -475,10 +475,10 @@ void IRQ_Handler(void) {
 0xF8F0060C  │   PTIMER_ISR             │  Flag de evento (W1C)
             ├──────────────────────────┤
 0xF8F01000  │   Distributor (GICD)     │
-0xF8F01000  │   GICD_CTLR              │  Enable distributor
-0xF8F01100  │   GICD_ISENABLER0        │  Enable IRQs 0–31
-0xF8F01420  │   GICD_IPRIORITYR7       │  Prioridad IRQ 28–31
-0xF8F01820  │   GICD_ITARGETSR7        │  Target CPU IRQ 28–31
+0xF8F01000  │   ICDDCR                 │  Enable distributor
+0xF8F01100  │   ICDISER0               │  Enable IRQs 0–31
+0xF8F01420  │   ICDIPR7                │  Prioridad IRQ 28–31
+0xF8F01820  │   ICDIPTR7               │  Target CPU IRQ 28–31
             └──────────────────────────┘
 ```
 
