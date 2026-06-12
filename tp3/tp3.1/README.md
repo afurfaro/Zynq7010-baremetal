@@ -189,7 +189,7 @@ En una implementación multiprocesador, los registros **ICDIPR0** a **ICDIPR7** 
 [7:0]   Prioridad, 
         byte offset 0
 ```
-Para un interrupt ID N, si DIV y MOD representan las operaciones de división entera y módulo se tiene:
+Para un Interrupt ID N, si DIV y MOD representan las operaciones de división entera y módulo se tiene:
 * El número M del **ICDIPR** correspondiente, se obtiene mediante **M = N DIV 4**.
 * El Offset del **ICDIPR** requerido respecto de la dirección Base del Distributor,  es **(0x400 + (4*M))**.
 * El byte offset del campo de Prioridad requerido en este registro es **N MOD 4**, donde:
@@ -215,7 +215,7 @@ En una implementación multiprocesador, los registros **ICDIPTR0** a **ICDIPTR7*
         byte offset 3	
 [23:16]	CPU target, 
         byte offset 2
-                          Los procesadores del sistema se numeran a partir del 0, y cada bit en un campo `CPU target` se refiere al procesador correspondiente (véase la Tablasiguiente). Por ejemplo, un valor de 0x3 significa que la interrupción pendiente se envía a los procesadores 0 y 1.
+                          Los procesadores del sistema se numeran a partir del 0, y cada bit en un campo `CPU target` se refiere al procesador correspondiente (véase la Tabla siguiente). Por ejemplo, un valor de 0x3 significa que la interrupción pendiente se envía a los procesadores 0 y 1.
                           Para ICDIPTR0 a ICDIPTR7, la lectura de cualquier campo CPU target devuelve el número del procesador que realiza la lectura.
 [15:8]	CPU target, 
         byte offset 1
@@ -515,13 +515,42 @@ Para lograr que el Private Timer genere interrupciones de manera periódica, hay
 
 > `ICCPMR` actúa como un umbral: solo pasan interrupciones con prioridad **menor** (numéricamente) al valor escrito. Con `0xFF` se habilitan todas.
 
+##### Gonfigurar el **GIC**
+Se definen las macros necesarias para referenciar los registros del **GIC** que se utilizarán en el archivo `gic.h`.
+```c
+/*------------------------------------------------*/
+/* Generic Interrupt Controller                   */
+/*------------------------------------------------*/
 
+/* Distributor */
 
+#define GICD_BASE              0xF8F01000
 
+#define GICD_CTLR              REG32(GICD_BASE + 0x000) /*ICDDCR` */
+#define GICD_ISENABLER0        REG32(GICD_BASE + 0x100) /*ICDISER0*/
+#define GICD_IPRIORITYR7       REG32(GICD_BASE + 0x41C) /*ICDIPR7`*/
+#define GICD_ITARGETSR7        REG32(GICD_BASE + 0x81C) /*ICDIPTR7*/
+
+/* CPU Interface */
+
+#define GICC_BASE              0xF8F00100
+
+#define GICC_CTLR              REG32(GICC_BASE + 0x000) /*ICCICR*/
+#define GICC_PMR               REG32(GICC_BASE + 0x004) /*ICCPMR*/
+#define GICC_IAR               REG32(GICC_BASE + 0x00C) /*ICCIAR*/
+#define GICC_EOIR              REG32(GICC_BASE + 0x010) /*ICCEOIR*/
+
+/*------------------------------------------------*/
+/* IDs de interrupción                            */
+/*------------------------------------------------*/
+
+#define IRQ_PRIVATE_TIMER      29
+```
+Luego inicializar en el código los registros es tan simple como se muestra en el archivo `gic.c`.
 
 
 ##### Configurar el Private Timer
-
+Se definen las macros necesarias para referenciar los registros del Private Timer que se utilizarán, en el archivo `timer.h`.
 ```c
 #define PTIMER_BASE            0xF8F00600   /*Dirección Base del Private Timer*/
 
