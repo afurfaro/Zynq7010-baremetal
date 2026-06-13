@@ -506,6 +506,9 @@ Para lograr que el Private Timer genere interrupciones de manera periódica, hay
 - Registro: `ICDISER0` (`0xF8F01100`)
 - Bit a setear: `1 << 29`
 
+:warning: **Importante:** Para el caso específico del Private Timer (IRQ 29, PPI), no es necesario configurar la entrada de interrupción. Las PPIs tienen su tipo de disparo fijo en hardware. El Private Timer está definido como level-sensitive activo en alto, y ese valor está hardcodeado. En la especificación del **GIC** se aclara que el registro **`ICDICFR`** es read-only para las PPIs.
+Para las SPIs (periféricos del SoC, con IRQs a partir de Interrupt ID 32) el registro **`ICDICFR`** (Interrupt Configuration Register) donde se configura flanco vs nivel. Pero para el Private Timer no se requiere configurarlo.
+
 ##### Configurar la CPU Interface (GICC)
 
 | Registro | Dirección | Qué hacer |
@@ -595,6 +598,7 @@ puede interpretarse conceptualmente en cuatro pasos:
 En otras palabras, esta sentencia equivale a escribir directamente en un registro físico del Private Timer. El hardware detecta esa escritura y actualiza internamente su registro. 
 
 > :bulb: El procesador no está manipulando memoria RAM convencional, sino interactuando directamente con un periférico mediante el mismo mecanismo de acceso a memoria que utiliza para leer o escribir variables comunes y corrientes.
+
 
 ---
 ##### El handler de interrupción

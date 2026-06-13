@@ -20,14 +20,17 @@ void gic_init(void)
      * Para determinar n en ICDIPTRn : n = Interrupt ID / 4, (4 es la cantidad de campos de 
      * cada registro). n = 29/4 = 7
      * Número de byte dentro del registro: Mod (29,4) = 1
-     * IRQ29 pertenece al registro ITARGETSR7, y la CPU se escribe en el byte N° 1 
+     * IRQ29 pertenece al registro ITARGETSR7, y la CPU se configura en el byte N° 1 (el segundo)
      * byte correspondiente al interrupt ID 29.
      */
 
-    GICD_ITARGETSR7 |= (1 << 8); /*ITARGETSR7[15:8] = 00000001. Bit mask. Es decir: CPU0*/
+    GICD_ITARGETSR7 |= (1 << 8); /*ITARGETSR7[15:8] = 00000001. Es un Bitmap: se selecciona solo CPU0*/
 
     /*
      * Prioridad media.
+     * Rango 0x00 - 0xFF. 0x80 es la mitad
+     * Un byte por cada Interrupt ID. El numero de registro de prioridad y el byte se determinan 
+     * igual que para el registro de Envio a la CPU
      */
 
     GICD_IPRIORITYR7 |= (0x80 << 8);

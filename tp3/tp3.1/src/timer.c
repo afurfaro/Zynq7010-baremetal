@@ -15,9 +15,9 @@ void timer_init(uint32_t load)
      * bits[15:8] = PRESCALER
      */
 
-    PTIMER_CONTROL = (1 << 0) |
-                     (1 << 1) |
-                     (1 << 2);
+    PTIMER_CONTROL = (1 << 0) | /*Habilitamos la cuenta del timer*/
+                     (1 << 1) | /*Autorecarga cuando llega a 0*/
+                     (1 << 2);  /*Genera interrupción al llegar a 0*/
 
     /* Limpiar una posible interrupción pendiente */
 
