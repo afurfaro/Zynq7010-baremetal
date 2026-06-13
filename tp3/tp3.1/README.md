@@ -84,7 +84,7 @@ La CPU Interface es **privada por core**. Es responsable de:
 > :bangbang: **El Private Timer del Cortex-A9 usa la interrupción ID 29 (PPI).**
 
 ##### Registros del Distributor
-El Distributor tiene varios registros memory mapped. Vamos a describir los que requiere para nuestra implementación.Siempre está la documentación de ARM para poder indagar acerca del resto si es necesario.
+El Distributor tiene varios registros memory mapped. Vamos a describir los que se requieren para nuestra implementación.Siempre está la documentación de ARM para poder indagar acerca del resto si es necesario.
 
 | Offset |  Name  | Type |   Reset  | Description |
 |--------|--------|------|----------|-------------|
